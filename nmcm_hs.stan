@@ -33,9 +33,8 @@ functions {
       vector[num_elements(yobs)] prob;
       real lprob;
         
-        
      for(i in 1:num_elements(yobs)){
-        if(alpha/exp(-(mu/alpha)) != 0 && yobs[i]/exp(-(mu/alpha)) != 0 && exp(-(mu/alpha)) != 0){ //catch errors for limit of computation
+        if(exp(-(mu/alpha)) > 0){ //catch errors for limit of computation
           if(v[i] == 0){ 
               term1 = 1;
             } else{
@@ -63,6 +62,16 @@ functions {
         
       return res;
   }
+  
+  vector hs_prior_lp(real r1_global, real r2_global, vector r1_local, vector r2_local, real nu) {
+    r1_global ~ normal(0.0, 1.0);
+    r2_global ~ inv_gamma(0.5, 0.5);
+
+    r1_local ~ normal(0.0, 1.0);
+    r2_local ~ inv_gamma(0.5 * nu, 0.5 * nu);
+
+    return (r1_global * sqrt(r2_global)) * r1_local .* sqrt_vec(r2_local);
+  }
       
   vector prior_lp(real r_global, vector r_local) {
     r_global ~ normal(0.0, 10.0);
@@ -76,56 +85,94 @@ functions {
 data {
   int<lower=0> N;
   int<lower=0> M_clinical;
+  int M_genomic;
   vector[N] yobs;   // observed time    
   vector[N] v_i;    //censor indicator
   matrix[N, M_clinical] X_clin;
-  int<lower=1> num_id[N];   //identification of number
+  matrix[N, M_genomic] X_gene;
+
 }
   
 transformed data {
   real<lower=0> tau_al;
   real<lower=0> tau_mu;
+  real<lower=1> nu;
     
   tau_al = 10.0;
-  tau_mu = 10.0;
+  tau_mu = 1.0;
+  nu = 3.0;
     
 }
   
 parameters {
+  vector[M_clinical] beta_clin_raw;
   real<lower=0> tau_s_clin_raw;
   vector<lower=0>[M_clinical] tau_clin_raw;
+  
+  vector[M_genomic] beta_gene_raw;
+  real<lower=0> tau_s1_gene_raw;
+  real<lower=0> tau_s2_gene_raw;
+  vector<lower=0>[M_genomic] tau1_gene_raw;
+  vector<lower=0>[M_genomic] tau2_gene_raw;
     
   real alpha_raw;
-  vector[M_clinical] beta_clin_raw;
     
-  real mu_raw;
+  real mu;
     
 }
   
 transformed parameters {
   vector[M_clinical] beta_clin;
-  vector[M_clinical] p;
+  vector[M_genomic] beta_gene;
+  vector[N] p;
   real<lower=0> alpha;
   real<lower=0> sigma;
-  real mu;
     
-  mu = tau_mu * mu;
+  beta_gene = hs_prior_lp(tau_s1_gene_raw, tau_s2_gene_raw, tau1_gene_raw, tau2_gene_raw, nu) .* beta_gene_raw;
   beta_clin = prior_lp(tau_s_clin_raw, tau_clin_raw) .* beta_clin_raw;
+  
   alpha = exp(tau_al * alpha_raw);
-    
   sigma = exp(-(mu/alpha));
-  p = exp(-exp(X_clin * beta_clin));
+  
+  p = exp(-exp(X_clin * beta_clin + X_gene * beta_gene));
     
 }
   
 model {
-  yobs ~ ptcm(v_i, p, alpha, sigma);
+  yobs ~ ptcm(v_i, p, sigma);
     
   beta_clin_raw ~ normal(0.0, 1.0);
+  beta_gene_raw ~ normal(0.0, 1.0);
   alpha_raw ~ normal(0.0, 1.0);
     
-  mu_raw ~ normal(0.0, 1.0);
+  mu_raw ~ normal(0.0, tau_mu);
     
+}
+
+generated quantities{
+  vector[N] log_lik;
+  real term1;
+  real term2;
+  real pdf;
+  real lpdf;
+
+  for(i in 1:N){
+      if(exp(-(mu/alpha)) > 0){ //catch errors for limit of computation
+        if(v_i[n] == 0){ 
+            term1 = 1;
+          } else{
+            lpdf = weibull_lpdf(yobs[n] | alpha, sigma);
+            pdf = exp(lpdf);
+            term1 = (-log(p[n])*pdf);
+          }
+        cdf = weibull_cdf(yobs[n] , alpha, exp(-(mu/alpha)));
+        term2 = exp(log(p[n])*cdf);
+        prob[n] = term1 * term2;
+      }else{
+        prob[n] = 1e-10;
+        }
+      log_lik[n] = log(prob[n])
+    }
 }
   
 

@@ -86,7 +86,7 @@ gen_stan_data <- function(data, formula = as.formula(~ 1)) {
   data <- data %>% mutate(
     dfs_progression = (dfs_status == 'Recurred/Progressed')
   )
-
+  
   X <- data %>% 
     model.matrix(formula, data = . )
   
@@ -110,13 +110,13 @@ rstan::stan_rdump(ls(into_data), file = "checking.data.R",
 
 
 gen_inits <- function(M){
-    list(
-      alpha_raw = 0.01*rnorm(1),
-      mu = rnorm(1),
-      tau_s_clin_raw = 0.1*abs(rnorm(1)),
-      tau_clin_raw = array(abs(rnorm(M)), dim = c(M)),
-      beta_clin_raw = array(rnorm(M), dim = c(M))
-    )
+  list(
+    alpha_raw = 0.01*rnorm(1),
+    mu = rnorm(1),
+    tau_s_clin_raw = 0.1*abs(rnorm(1)),
+    tau_clin_raw = array(abs(rnorm(M)), dim = c(M)),
+    beta_clin_raw = array(rnorm(M), dim = c(M))
+  )
 }
 
 inits <- gen_inits(M = 3)
