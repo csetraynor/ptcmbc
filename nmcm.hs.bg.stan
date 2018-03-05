@@ -172,8 +172,10 @@ generated quantities{
   vector[N] log_lik;
   real term1;
   real term2;
+  real cdf;
   real pdf;
   real lpdf;
+  real prob;
 
   for(i in 1:N){
       if(exp(-(mu/alpha)) > 0){ //catch errors for limit of computation
@@ -186,9 +188,9 @@ generated quantities{
           }
         cdf = weibull_cdf(yobs[n] , alpha, exp(-(mu + pr[n]/alpha)));
         term2 = exp(log(p[n])*cdf);
-        prob[n] = term1 * term2;
+        prob = term1 * term2;
       }else{
-        prob[n] = 1e-10;
+        prob = 1e-10;
         }
       log_lik[n] = log(prob[n])
     }

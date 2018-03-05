@@ -140,7 +140,7 @@ gen_inits <- function(M_clinical, M_genomic){
       tau1_gene_raw = abs(rnorm(M_genomic)),
       tau2_gene_raw = abs(rnorm(M_genomic)),
       beta_clin_raw = array(rnorm(M_clinical), dim = c(M_clinical)),
-      beta_biom_raw = rnorm(M_genomic),
+      beta_gene_raw = rnorm(M_genomic),
       
       tau_gam_s_clin_raw = 0.1*abs(rnorm(1)),
       tau_gam_clin_raw = array(abs(rnorm(M_clinical-1)), dim = c(M_clinical-1)),
@@ -150,7 +150,7 @@ gen_inits <- function(M_clinical, M_genomic){
       tau_gam1_gene_raw = abs(rnorm(M_genomic)),
       tau_gam2_gene_raw = abs(rnorm(M_genomic)),
       gamma_clin_raw = array(rnorm(M_clinical-1), dim = c(M_clinical-1)),
-      gamma_biom_raw = rnorm(M_genomic)
+      gamma_gene_raw = rnorm(M_genomic)
     )
 }
 

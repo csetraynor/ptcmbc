@@ -119,7 +119,7 @@ gen_inits <- function(M_clinical, M_genomic){
   function()
   list(
     alpha_raw = 0.01*rnorm(1),
-    mu_raw = 0.01*rnorm(1),
+    mu = rnorm(1),
     tau_s_clin_raw = 0.1*abs(rnorm(1)),
     tau_clin_raw = array(abs(rnorm(M_clinical)), dim = c(M_clinical)),
     tau_s1_gene_raw = 0.1*abs(rnorm(1)),
@@ -128,7 +128,7 @@ gen_inits <- function(M_clinical, M_genomic){
     tau1_gene_raw = abs(rnorm(M_genomic)),
     tau2_gene_raw = abs(rnorm(M_genomic)),
     beta_clin_raw = array(rnorm(M_clinical), dim = c(M_clinical)),
-    beta_biom_raw = rnorm(M_genomic)
+    beta_gene_raw = rnorm(M_genomic)
   )
 }
 
@@ -141,7 +141,7 @@ stanfile <- 'ptcmbc/nmcm_hs.stan'
 sim_fit <- stan(stanfile,
                 data = gen_stan_data(simd, clinical_formula = '~cli_1 + cli_2', genomic_formula),
                 init = gen_inits(M_clinical = 3, M_genomic = 200),
-                iter = 1000,
+                iter = 10,
                 thin = 1,  #applying a thin of 10 for avoiding the autocorrelation in baseline hazard
                 cores = min(nChain, parallel::detectCores()),
                 seed = 7327,

@@ -95,11 +95,9 @@ data {
   
 transformed data {
   real<lower=0> tau_al;
-  real<lower=0> tau_mu;
   real<lower=1> nu;
     
   tau_al = 10.0;
-  tau_mu = 1.0;
   nu = 3.0;
     
 }
@@ -117,6 +115,7 @@ parameters {
     
   real alpha_raw;
     
+  real<lower=0> tau_mu;
   real mu;
     
 }
@@ -126,26 +125,25 @@ transformed parameters {
   vector[M_genomic] beta_gene;
   vector[N] p;
   real<lower=0> alpha;
-  real<lower=0> sigma;
     
   beta_gene = hs_prior_lp(tau_s1_gene_raw, tau_s2_gene_raw, tau1_gene_raw, tau2_gene_raw, nu) .* beta_gene_raw;
   beta_clin = prior_lp(tau_s_clin_raw, tau_clin_raw) .* beta_clin_raw;
   
   alpha = exp(tau_al * alpha_raw);
-  sigma = exp(-(mu/alpha));
   
   p = exp(-exp(X_clin * beta_clin + X_gene * beta_gene));
     
 }
   
 model {
-  yobs ~ ptcm(v_i, p, sigma);
+  yobs ~ ptcm(v_i, p, alpha, mu);
     
   beta_clin_raw ~ normal(0.0, 1.0);
   beta_gene_raw ~ normal(0.0, 1.0);
   alpha_raw ~ normal(0.0, 1.0);
     
-  mu_raw ~ normal(0.0, tau_mu);
+  mu ~ normal(0.0, tau_mu);
+  tau_mu ~ cauchy(0.0, 2.0);
     
 }
 
@@ -153,25 +151,27 @@ generated quantities{
   vector[N] log_lik;
   real term1;
   real term2;
+  real cdf;
   real pdf;
   real lpdf;
+  real prob;
 
-  for(i in 1:N){
+  for(n in 1:N){
       if(exp(-(mu/alpha)) > 0){ //catch errors for limit of computation
         if(v_i[n] == 0){ 
             term1 = 1;
           } else{
-            lpdf = weibull_lpdf(yobs[n] | alpha, sigma);
+            lpdf = weibull_lpdf(yobs[n] | alpha, exp(-(mu/alpha)));
             pdf = exp(lpdf);
             term1 = (-log(p[n])*pdf);
           }
         cdf = weibull_cdf(yobs[n] , alpha, exp(-(mu/alpha)));
         term2 = exp(log(p[n])*cdf);
-        prob[n] = term1 * term2;
+        prob = term1 * term2;
       }else{
-        prob[n] = 1e-10;
+        prob = 1e-10;
         }
-      log_lik[n] = log(prob[n])
+      log_lik[n] = log(prob);
     }
 }
   
