@@ -136,12 +136,12 @@ gen_inits <- function(M_clinical, M_genomic){
 library(rstan)
 options(mc.cores = parallel::detectCores())
 rstan_options(auto_write = TRUE)
-nChain <- 1
+nChain <- 2
 stanfile <- 'ptcmbc/nmcm_hs.stan'
 sim_fit <- stan(stanfile,
                 data = gen_stan_data(simd, clinical_formula = '~cli_1 + cli_2', genomic_formula),
                 init = gen_inits(M_clinical = 3, M_genomic = 200),
-                iter = 10,
+                iter = 20000,
                 thin = 1,  #applying a thin of 10 for avoiding the autocorrelation in baseline hazard
                 cores = min(nChain, parallel::detectCores()),
                 seed = 7327,
