@@ -2,70 +2,73 @@ library(Rlab)
 library(tidyverse)
 library(survival)
 
-alpha_raw <- 0.2
-tau_al <- 0.5
-log_alpha <- alpha_raw * tau_al
-test_alpha <- exp(log_alpha)
-print(test_alpha)
-test_mu <- -3
-
-z1 <- Rlab::rbern(100, prob = 0.5)
-z2 <- stats::runif(100, 2.1, 3.1)
-test_X <- as.matrix(cbind(z1, z2))
-#Survival months simulation
-b0 <- 2
-b1 <- 1
-b2 <- -1
-test_beta <- c(b0, b1, b2)
-
-test_N = 1000
+# alpha_raw <- 0.2
+# tau_al <- 0.5
+# log_alpha <- alpha_raw * tau_al
+# alpha <- exp(log_alpha)
+# print(test_alpha)
 
 ## ----sim-data-function-----------------------------------------------
-fun_sim_data <- function(alpha, mu, N, beta , X) {
+fun_sim_data <- function(alpha, mu, N, beta , icept, X, a) {
   
-  intercept <- beta[1] 
-  riski <- X %*% beta[-1]
-  #cure probabilities
-  cure <- exp(-exp(intercept + riski))
+  b0 <- icept
+  risk <- X %*% beta #prognostic index
+  f <- exp(b0 + risk) #link function mixed model
+  th <- exp(risk) #link function time promotion 
   
+  cr <- (1 + a * f)^-2 #cure rate
+  cure = ifelse(cr > runif(N), T, F) #F "uncured" T "cured"
+
+  spop<- runif(N, min = cr, max = 1) #set Surv pop to a unif rv
   
+  term1 <- log(1 - (1 - (spop)^(1/2) ) / ( a * f / (1 + a * f))) #inverse function
+  term2 <- ( - term1 / (mu + th) ) ^ (1 / alpha)
   
-  data <- data.frame(surv_months = rweibull(n = N, alpha, exp(-(mu)/alpha)),
-                     censor_months = rexp(n = N, rate = 1/10),
-                     stringsAsFactors = F, 
-                     cure_prob = cure,
-                     random_prob = runif(N)
-  ) %>%
-    dplyr::mutate(
-      surv_months = ifelse(random_prob < cure_prob, 99999, surv_months), # cured subjects
-      dfs_status = ifelse(surv_months < censor_months,
-                          'Recurred/Progressed', 'Disease Free'
-      ),
-      dfs_months = ifelse(surv_months < censor_months,
-                          surv_months, censor_months
-      )
-    ) %>% cbind(test_X)
-  
+  data <- data.frame(dfs_time = term2,
+                     cure_i = cure, #F "uncured" T "cured"
+                     censor_time = rexp(N, 1),
+                     stringsAsFactors = F)  %>%
+  dplyr::mutate(
+    dfs_time = ifelse( cure_i == T, 10e10, dfs_time )) %>%  #Inf time for cure
+  dplyr::mutate(
+      d = ifelse(dfs_time < censor_time, 'Recurred/Progressed', 'Disease Free')) %>%
+  dplyr::mutate( 
+    dfs_obs = ifelse(dfs_time < censor_time, dfs_time, censor_time)) %>%
+    cbind(test_X)
   
   return(data)
 }
 ## ----sim-data--------------------------------------------------------
+
+z1 <- Rlab::rbern(1000, prob = 0.5)
+z2 <- stats::runif(1000, 2.1, 3.1)
+test_X <- as.matrix(cbind(z1, z2))
+#Survival months simulation
+test_icept <- 2
+b1 <- 1
+b2 <- -1
+test_beta <- c(b1, b2)
+test_N = 1000
+test_a <- 0.7
+test_alpha <- 1
+test_mu <- 0.5
 
 simd <- fun_sim_data(
   alpha = test_alpha,
   mu = test_mu,
   N = test_N,
   X = test_X,
-  beta = test_beta
+  beta = test_beta,
+  a = test_a,
+  icept = test_icept
 )
 #Time to Event Distribution#
-simd %>% ggplot(aes(x = dfs_months,
-                    group = dfs_status,
-                    colour = dfs_status,
-                    fill = dfs_status)) + geom_density(alpha = 0.5)
-autoplot(survival::survfit(Surv(dfs_months, I(dfs_status == 'Recurred/Progressed')) ~ 1,data = simd), conf.int = F)
-
-
+simd %>% ggplot(aes(x = dfs_obs,
+                    group = d,
+                    colour = d,
+                    fill = d)) + geom_density(alpha = 0.5)
+require(ggfortify)
+autoplot(survival::survfit(Surv(dfs_obs, I(d == 'Recurred/Progressed')) ~ 1,data = simd), conf.int = F)
 
 ## MLE fit
 
@@ -77,48 +80,8 @@ resMY
 summary(resMY)
 
 
-############################################################################
-gen_stan_data <- function(data, formula = as.formula(~ 1)) {
-  
-  if (!inherits(formula, 'formula'))
-    formula <- as.formula(formula)
-  
-  data <- data %>% mutate(
-    dfs_progression = (dfs_status == 'Recurred/Progressed')
-  )
-  
-  X <- data %>% 
-    model.matrix(formula, data = . )
-  
-  M <- ncol(X)
-  
-  stan_data <- list(
-    N = nrow(data),
-    yobs = data$dfs_months,
-    v_i = as.numeric(data$dfs_progression),
-    M_clinical = M,
-    X_clin = array(X, dim = c(nrow(data), M))
-  )
-}
-
-into_data <- gen_stan_data(simd, '~ z1 + z2')
-into_data %>% glimpse
 
 
-rstan::stan_rdump(ls(into_data), file = "checking.data.R",
-                  envir = list2env(into_data))
 
 
-gen_inits <- function(M){
-  list(
-    alpha_raw = 0.01*rnorm(1),
-    mu = rnorm(1),
-    tau_s_clin_raw = 0.1*abs(rnorm(1)),
-    tau_clin_raw = array(abs(rnorm(M)), dim = c(M)),
-    beta_clin_raw = array(rnorm(M), dim = c(M))
-  )
-}
 
-inits <- gen_inits(M = 3)
-rstan::stan_rdump(ls(inits), file = "checking.inits.R",
-                  envir = list2env(inits))

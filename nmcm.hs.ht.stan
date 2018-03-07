@@ -24,7 +24,7 @@
 */
     
 functions {
-  real ptcm_log(vector yobs, vector v, matrix X_clin, vector beta_clin, matrix X_gene, vector beta_gene,  real alpha, real mu){
+  real ptcm_log(vector yobs, vector v, vector f, real alpha, real mu){
       real lpdf;
       real pdf;
       real cdf;
@@ -32,25 +32,20 @@ functions {
       real term2;
       vector[num_elements(yobs)] prob;
       real lprob;
-      vector[num_elements(yobs)] f; //link
-      
-      //link function 
-      f = exp(-exp( X_clin * beta_clin + X_gene * beta_gene));
         
      for(i in 1:num_elements(yobs)){
         if(exp(-(mu/alpha)) > 0){ //catch errors for limit of computation
           if(v[i] == 0){ 
               term1 = 1;
             } else{
-              lpdf = weibull_lpdf(yobs[i] | alpha, exp(-(mu/alpha)));
+              lpdf = weibull_lpdf(yobs[i] | alpha, exp(-(mu)/alpha));
               pdf = exp(lpdf);
               term1 = (-log(f[i])*pdf);
             }
-          cdf = weibull_cdf(yobs[i] , alpha, exp(-(mu/alpha)));
+          cdf = weibull_cdf(yobs[i] , alpha, exp(-(mu)/alpha));
           term2 = exp(log(f[i])*cdf);
           prob[i] = term1 * term2;
         }else{
-          print(" mu ", mu, " alpha ",alpha);
           prob[i] = 1e-10;
         }
       }
@@ -68,14 +63,22 @@ functions {
       return res;
   }
   
-  vector hs_prior_lp(real r1_global, real r2_global, vector r1_local, vector r2_local, real nu) {
-    r1_global ~ normal(0.0, 1.0);
-    r2_global ~ inv_gamma(0.5, 0.5);
+  vector hs_prior_lp(real r1_global, real r2_global, vector r1_local, vector r2_local, real scale_global, real nu_global, real nu_local) {
+    vector[num_elements(r1_local)] lambda;
+    real tau;
 
+    //half-t prior for tau
+    r1_global ~ normal(0.0, scale_global);
+    r2_global ~ inv_gamma(0.5 * nu_global, 0.5 * nu_global);
+
+    //half-t prior for lambdas
     r1_local ~ normal(0.0, 1.0);
-    r2_local ~ inv_gamma(0.5 * nu, 0.5 * nu);
+    r2_local ~ inv_gamma(0.5 * nu_local, 0.5 * nu_local);
+    
+    lambda = r1_local .* sqrt_vec(r2_local);
+    tau = r1_global * sqrt(r2_global);
 
-    return (r1_global * sqrt(r2_global)) * r1_local .* sqrt_vec(r2_local);
+    return (lambda * tau);
   }
       
   vector prior_lp(real r_global, vector r_local) {
@@ -100,7 +103,9 @@ data {
   
 transformed data {
   real<lower=0> tau_al;
-  real<lower=1> nu;
+  real<lower=1> nu_local;      //degrees of freedom for half-t tau
+  real<lower=1> nu_global;     //degrees of freedom for half-t for lambdas
+  real<lower=0> scale_global;  //scale for the half-t prior for tau
   vector[N] icept;
   
   for(i in 1:N){
@@ -108,8 +113,10 @@ transformed data {
   }
     
   tau_al = 10.0;
-
-  nu = 3.0;
+  
+  nu_local = 1.0;    //horshor prior
+  scale_global = 3e-3;
+  nu_global = 1.0;  //half-cauchy prior  
     
 }
   
@@ -123,69 +130,62 @@ parameters {
   real<lower=0> tau_s2_gene_raw;
   vector<lower=0>[M_genomic] tau1_gene_raw;
   vector<lower=0>[M_genomic] tau2_gene_raw;
+  
+  real beta0;
+  real<lower=0> scale_icept;
     
   real alpha_raw;
     
   real<lower=0> tau_mu;
   real mu;
   
-  real beta0;
-  real<lower=0> scale_icept;
+  real<lower=0> scale_global_raw;
+  real<lower=1> nu_local_raw;
+  real<lower=1> nu_global_raw;
     
 }
   
 transformed parameters {
   vector[M_clinical] beta_clin;
   vector[M_genomic] beta_gene;
-  vector[N] p;
-  real<lower=0> alpha;
-    
-  //horseshoe prior for genomic vars
-  beta_gene = hs_prior_lp(tau_s1_gene_raw, tau_s2_gene_raw, tau1_gene_raw, tau2_gene_raw, nu) .* beta_gene_raw;
-  //gaussian prior for beta clinical and mu
-  beta_clin = prior_lp(tau_s_clin_raw, tau_clin_raw) .* beta_clin_raw;
+  vector[N] f;                   //latent values
+  real<lower=0> alpha;  
 
-  //alpha reparameterization
+  beta_gene = hs_prior_lp(tau_s1_gene_raw, tau_s2_gene_raw, tau1_gene_raw, tau2_gene_raw, scale_global, nu_global, nu_local) .* beta_gene_raw;
+  beta_clin = prior_lp(tau_s_clin_raw, tau_clin_raw) .* beta_clin_raw;
+  
   alpha = exp(tau_al * alpha_raw);
   
-
-    
+  f = exp(-exp(icept * beta0 + X_clin * beta_clin + X_gene * beta_gene));
 }
   
 model {
+
   // gaussian prior for intercept
-  scale_icept ~ exponential(0.01);
+  scale_icept ~ exponential(0.1);
   beta0 ~ normal(0.0, scale_icept);
-  
-  //scale prior
-  alpha_raw ~ normal(0.0, 10.0);
-  
     
-  //regression prior  
   beta_clin_raw ~ normal(0.0, 1.0);
   beta_gene_raw ~ normal(0.0, 1.0);
+  
+  alpha_raw ~ normal(0.0, 1.0);
     
-  //mu prior  
   tau_mu ~ exponential(0.1);  
   mu ~ normal(0.0, tau_mu);
   
-  //model
-
-  yobs ~ ptcm(v_i, X_clin, beta_clin, X_gene, beta_gene, alpha, mu);  
+  //observation
+  yobs ~ ptcm(v_i, f, alpha, mu);
+    
 }
 
 generated quantities{
   vector[N] log_lik;
-  vector[N] f;
   real term1;
   real term2;
   real cdf;
   real pdf;
   real lpdf;
   real prob;
-  
-  //calculate link function
-  f = exp(-exp( X_clin * beta_clin + X_gene * beta_gene));
 
   for(n in 1:N){
       if(exp(-(mu/alpha)) > 0){ //catch errors for limit of computation
@@ -206,7 +206,6 @@ generated quantities{
     }
 }
   
-
 
   
   

@@ -158,9 +158,9 @@ gen_inits <- function(M_clinical, M_genomic){
 library(rstan)
 options(mc.cores = parallel::detectCores())
 rstan_options(auto_write = TRUE)
-nChain <- 1
+nChain <- 4
 stanfile <- 'ptcmbc/nmcm.hs.bg.stan'
-sim_fit <- stan(stanfile,
+sim_fit2 <- stan(stanfile,
                 data = gen_stan_data(simd, clinical_formula = '~cli_1 + cli_2', genomic_formula),
                 init = gen_inits(M_clinical = 3, M_genomic = 200),
                 iter = 1000,
