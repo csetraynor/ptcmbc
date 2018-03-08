@@ -8,20 +8,20 @@ gen_stan_data <- function(data, formula = as.formula(~ 1)) {
     formula <- as.formula(formula)
   
   data <- data %>% mutate(
-    dfs_progression = (d == 'Recurred/Progressed')
+    dfs_progression = (dfs_status == 'Recurred/Progressed')
   )
   
-  X <- data %>% 
+  Z <- data %>% 
     model.matrix(formula, data = . )
   
-  M <- ncol(X)
+  M <- ncol(Z)
   
   stan_data <- list(
     N = nrow(data),
     yobs = data$dfs_obs,
     v_i = as.numeric(data$dfs_progression),
     M_clinical = M,
-    X_clin = array(X, dim = c(nrow(data), M))
+    Z_clin = array(Z, dim = c(nrow(data), M))
   )
 }
 
@@ -32,20 +32,15 @@ into_data %>% glimpse
  rstan::stan_rdump(ls(into_data), file = "checking.data.R",
                    envir = list2env(into_data))
 #--- Set initial Values ---#
-gen_inits <- function(M, N){
-  #function()
+gen_inits <- function(M){
+  function()
     list(
       alpha_raw = 0.01*rnorm(1),
       mu = rnorm(1, 0, 10),
-      a = rbeta(1,2,2),
       
       tau_s_cb_raw = 0.1*abs(rnorm(1)),
       tau_cb_raw = array(abs(rnorm(M)), dim = c(M)),
-      beta_clin_raw = array(rnorm(M), dim = c(M)),
-      
-      tau_s_cg_raw = 0.1*abs(rnorm(1)),
-      tau_cg_raw = array(abs(rnorm(M-1)), dim = c(M-1)),
-      gamma_clin_raw = array(rnorm(M-1), dim = c(M-1))
+      beta_clin_raw = array(rnorm(M), dim = c(M))
     )
 }
  inits <- gen_inits(M = 3, N = 1000)
@@ -56,11 +51,11 @@ library(rstan)
 options(mc.cores = parallel::detectCores())
 rstan_options(auto_write = TRUE)
 nChain <- 1
-stanfile <- 'crm.stan'
+stanfile <- 'nmc.stan'
 sim_fit <- stan(stanfile,
                 data = gen_stan_data(simd, '~ z1 + z2'),
                 init = gen_inits(M = 3),
-                iter = 1000,
+                iter = 2000,
                 thin = 1,  #applying a thin of 10 for avoiding the autocorrelation in baseline hazard
                 cores = min(nChain, parallel::detectCores()),
                 seed = 7327,
