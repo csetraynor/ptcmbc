@@ -40,6 +40,35 @@ functions {
         
     return r_global * sqrt_vec(r_local);
   }
+      real newweibull_pdf(real t, real a, real s){
+        real a_s;
+        real t_s;
+        real a_1;
+        real term1;
+        real term2;
+        real pdf;
+        a_s = a/s;
+        t_s = t/s;
+        a_1 = a-1;
+        
+        term1 = a_s * (t_s)^a_1;
+        term2 = exp(-(t_s)^a);
+        pdf = term1 * term2;
+        
+        return pdf;
+      }
+      
+    real newweibull_cdf(real t, real a, real s){
+        real t_s;
+        real term1;
+        real cdf;
+        
+        t_s = t/s;
+        term1 = t_s^a;
+        cdf = 1-exp(-term1);
+        
+        return cdf;
+      }
   //Likelihood function for the cure model
   real ptcm_log(vector yobs, vector v, vector b, vector g, matrix X, real alpha, real mu, real a){
       real lpdf;
@@ -53,13 +82,12 @@ functions {
      f = exp(X * b) ./ (1 + a * exp(X * b) );
      
      for(i in 1:num_elements(yobs)){
-        if( ( exp(-(mu + X[i,2:] * g) / alpha) <= 0) || (alpha <= 0) ){
+        if( exp(-(mu + X[i,2:] * g) / alpha) <= 0 || exp(-(mu + X[i,2:] * g) / alpha) > 999999 || alpha <= 0 || a * f[i] < 0 || a * f[i] > 1){
                     prob[i] = 1e-10;  //catch errors for limit of computation
         }else{
-          lpdf = weibull_lpdf(yobs[i] | alpha, exp(-(mu + X[i,2:] * g) / alpha) );
-          pdf = exp(lpdf);
+          pdf = newweibull_pdf(yobs[i], alpha, exp(-(mu + X[i,2:] * g) / alpha) );
           term1 = (f[i] * pdf)^v[i];
-          cdf = weibull_cdf(yobs[i] , alpha, exp(-(mu + X[i,2:] * g) / alpha) );
+          cdf = newweibull_cdf(yobs[i] , alpha, exp(-(mu + X[i,2:] * g) / alpha) );
           term2 = (1 - ( a * f[i] * cdf))^(1 / (a - v[i]));
           prob[i] = term1 * term2;
         }
@@ -83,9 +111,7 @@ transformed data {
 
   tau_al = 10.0;
   tau_mu = 10.0;
-  real<lower=0, upper=1> a;
-    
-  a = 0.7;  
+
 }
   
 parameters {
@@ -100,6 +126,7 @@ parameters {
   real alpha_raw;
   real mu;
   
+  real<lower=0, upper=1> a;
     
 }
   
@@ -107,12 +134,12 @@ transformed parameters {
   vector[M_clinical] beta_clin;
   vector[M_clinical-1] gamma_clin;
   real<lower=0> alpha;
-
+  
   beta_clin = prior_lp(tau_s_cb_raw, tau_cb_raw) .* beta_clin_raw;
   gamma_clin = prior_lp(tau_s_cg_raw, tau_cg_raw) .* gamma_clin_raw;
   
   alpha = exp(tau_al * alpha_raw);
-    
+
 }
   
 model {
@@ -125,7 +152,7 @@ model {
     
   mu ~ normal(0.0, tau_mu);
   
-  a ~ beta(2,2);
+  a ~ beta(2.0 , 2.0);
     
 }
   

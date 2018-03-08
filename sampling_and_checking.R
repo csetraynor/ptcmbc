@@ -9,49 +9,49 @@ library(survival)
 # print(test_alpha)
 
 ## ----sim-data-function-----------------------------------------------
-fun_sim_data <- function(alpha, mu, N, beta , icept, X, a) {
+fun_sim_data <- function(alpha, mu, N, beta, gamma , icept, X, a) {
   
   b0 <- icept
   risk <- X %*% beta #prognostic index
   f <- exp(b0 + risk) #link function mixed model
-  th <- exp(risk) #link function time promotion 
+  th <- exp(X %*% gamma) #link function time promotion 
   
-  cr <- (1 + a * f)^-2 #cure rate
+  cr <- (1 - a * (f / (1 + a * f) )   )^(round(1/a, 5)) #cure rate
   cure = ifelse(cr > runif(N), T, F) #F "uncured" T "cured"
 
-  spop<- runif(N, min = cr, max = 1) #set Surv pop to a unif rv
+  spop<- runif(N - sum(cure), min = cr[cure == F], max = 1) #set Surv pop to a unif rv
   
-  term1 <- log(1 - (1 - (spop)^(1/2) ) / ( a * f / (1 + a * f))) #inverse function
-  term2 <- ( - term1 / (mu + th) ) ^ (1 / alpha)
+  term1 <- log(1 - ( (1 - (spop)^(a) ) / ( a * f[cure == F] / (1 + a * f[cure == F]))) ) #inverse function
+  dfs <- ( - term1 / exp( -(mu + th[cure == F])/alpha) ) ^ (1 / alpha)
   
-  data <- data.frame(dfs_time = term2,
-                     cure_i = cure, #F "uncured" T "cured"
-                     censor_time = rexp(N, 1),
-                     stringsAsFactors = F)  %>%
-  dplyr::mutate(
-    dfs_time = ifelse( cure_i == T, 10e10, dfs_time )) %>%  #Inf time for cure
+  data_uncured <- data_frame(dfs_time = dfs) %>% cbind(X[cure == F,])
+  data_cured <- data_frame(dfs_time = 9999) %>% cbind(X[cure == T,])
+  
+  data <- rbind(data_cured, data_uncured) %>% mutate(
+    censor_time = rexp(N, 1)) %>%
   dplyr::mutate(
       d = ifelse(dfs_time < censor_time, 'Recurred/Progressed', 'Disease Free')) %>%
   dplyr::mutate( 
-    dfs_obs = ifelse(dfs_time < censor_time, dfs_time, censor_time)) %>%
-    cbind(test_X)
+    dfs_obs = ifelse(dfs_time < censor_time, dfs_time, censor_time))
   
   return(data)
 }
 ## ----sim-data--------------------------------------------------------
 
-z1 <- Rlab::rbern(1000, prob = 0.5)
-z2 <- stats::runif(1000, 2.1, 3.1)
-test_X <- as.matrix(cbind(z1, z2))
+test_X <- matrix(rnorm(2000), ncol = 2)
+colnames(test_X) <- c("z1", "z2")
 #Survival months simulation
 test_icept <- 2
 b1 <- 1
 b2 <- -1
 test_beta <- c(b1, b2)
+g1 <- 2
+g2 <- -2
+test_gamma <- c(g1, g2)
 test_N = 1000
-test_a <- 0.7
+test_a <- 0.5
 test_alpha <- 1
-test_mu <- 0.5
+test_mu <- 1
 
 simd <- fun_sim_data(
   alpha = test_alpha,
@@ -59,6 +59,7 @@ simd <- fun_sim_data(
   N = test_N,
   X = test_X,
   beta = test_beta,
+  gamma =  test_gamma,
   a = test_a,
   icept = test_icept
 )

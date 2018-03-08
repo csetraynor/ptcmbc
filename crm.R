@@ -29,14 +29,14 @@ into_data <- gen_stan_data(simd, '~ z1 + z2')
 into_data %>% glimpse
 
 
-# rstan::stan_rdump(ls(into_data), file = "checking.data.R",
-#                   envir = list2env(into_data))
+ rstan::stan_rdump(ls(into_data), file = "checking.data.R",
+                   envir = list2env(into_data))
 #--- Set initial Values ---#
-gen_inits <- function(M){
-  function()
+gen_inits <- function(M, N){
+  #function()
     list(
       alpha_raw = 0.01*rnorm(1),
-      mu = rnorm(1),
+      mu = rnorm(1, 0, 10),
       a = rbeta(1,2,2),
       
       tau_s_cb_raw = 0.1*abs(rnorm(1)),
@@ -48,9 +48,9 @@ gen_inits <- function(M){
       gamma_clin_raw = array(rnorm(M-1), dim = c(M-1))
     )
 }
-# inits <- gen_inits(M = 3)
-# rstan::stan_rdump(ls(inits), file = "checking.inits.R",
-#                   envir = list2env(inits))
+ inits <- gen_inits(M = 3, N = 1000)
+ rstan::stan_rdump(ls(inits), file = "checking.inits.R",
+                   envir = list2env(inits))
 #-----Run Stan-------#
 library(rstan)
 options(mc.cores = parallel::detectCores())
