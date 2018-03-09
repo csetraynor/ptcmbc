@@ -13,14 +13,17 @@ gen_stan_data <- function(data, formula = as.formula(~ 1)) {
   
   Z <- data %>% 
     model.matrix(formula, data = . )
-  
   M <- ncol(Z)
+  if (M > 1) {
+    if ("(Intercept)" %in% colnames(Z))
+    Z <- array(Z[,-1], dim = c(nrow(data), M - 1)) ; M <- M-1;
+    }
   
   stan_data <- list(
     N = nrow(data),
     yobs = data$dfs_obs,
     v_i = as.numeric(data$dfs_progression),
-    M_clinical = M,
+    M_clinical = as.integer(M),
     Z_clin = array(Z, dim = c(nrow(data), M))
   )
 }
@@ -33,17 +36,18 @@ into_data %>% glimpse
                    envir = list2env(into_data))
 #--- Set initial Values ---#
 gen_inits <- function(M){
-  function()
+  #function()
     list(
       alpha_raw = 0.01*rnorm(1),
       mu = rnorm(1, 0, 10),
       
       tau_s_cb_raw = 0.1*abs(rnorm(1)),
       tau_cb_raw = array(abs(rnorm(M)), dim = c(M)),
-      beta_clin_raw = array(rnorm(M), dim = c(M))
+      beta_clin_raw = array(rnorm(M), dim = c(M)),
+      b0 = rnorm(1)
     )
 }
- inits <- gen_inits(M = 3, N = 1000)
+ inits <- gen_inits(M = 2)
  rstan::stan_rdump(ls(inits), file = "checking.inits.R",
                    envir = list2env(inits))
 #-----Run Stan-------#
