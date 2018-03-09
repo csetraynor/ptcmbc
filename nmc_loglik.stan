@@ -22,26 +22,9 @@
   num index of individuals, (individuals must be ordered in descending order of observed time)
   Xclin must include the intercept
 */
-    
-functions {
-    vector sqrt_vec(vector x) {
-      vector[dims(x)[1]] res;
-        
-    for (m in 1:dims(x)[1]){
-        res[m] = sqrt(x[m]);
-    }
-        
-      return res;
-  }
-  //Gaussian Prior
-  vector prior_lp(real r_global, vector r_local) {
-    r_global ~ normal(0.0, 10.0);
-    r_local ~ inv_chi_square(1.0);
-        
-    return r_global * sqrt_vec(r_local);
-  }
 
   //Likelihood function for the cure model
+functions {
   real ptcm_log(vector yobs, vector v, vector beta_clin, matrix Z_clin, real alpha, real mu){
       real lpdf;
       real pdf;
@@ -82,9 +65,11 @@ data {
 transformed data {
   real<lower=0> tau_al;
   real<lower=0> tau_mu;
+  real<lower=0> tau_beta;
 
   tau_al = 10.0;
   tau_mu = 10.0;
+  tau_beta = 10;
 }
   
 parameters {
@@ -101,7 +86,7 @@ transformed parameters {
   vector[M_clinical] beta_clin;
   real<lower=0> alpha;
   
-  beta_clin = prior_lp(tau_s_cb_raw, tau_cb_raw) .* beta_clin_raw;
+  beta_clin = tau_beta * beta_clin_raw;
   alpha = exp(tau_al * alpha_raw);
 }
   
@@ -146,6 +131,7 @@ generated quantities{
         yhat_uncensored[i] =  exp(-(mu) / alpha) * (- log(1 - (log(U) / log(lp[i])) ) )^(1/alpha);
     }
 }
+
 
 
           
