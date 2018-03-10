@@ -12,9 +12,9 @@ library(survival)
 # md <-  tbl_df(getClinicalData(mycgds, brca15c))
 # Frozen data from publication --- >
 
-sampledat <- read_tsv("data/brca_tcga_pub2015/data_clinical_sample.txt", skip = 4)
-patientdat <- read_tsv("data/brca_tcga_pub2015/data_clinical_patient.txt", skip = 4)
-gendat <- read_tsv("data/brca_tcga_pub2015/data_mRNA_median_Zscores.txt", col_names = TRUE)
+sampledat <- read_tsv("brca_data/brca_tcga_pub2015/data_clinical_sample.txt", skip = 4)
+patientdat <- read_tsv("brca_data/brca_tcga_pub2015/data_clinical_patient.txt", skip = 4)
+gendat <- read_tsv("brca_data/brca_tcga_pub2015/data_mRNA_median_Zscores.txt", col_names = TRUE)
 # Get an easier code to read
 names(sampledat) <- tolower(names(sampledat))
 names(patientdat) <- tolower(names(patientdat))
@@ -48,7 +48,7 @@ md %>% ggplot(aes(x = dfs_months,
                   colour = dfs_status,
                   fill = dfs_status)) + geom_density(alpha = 0.5)
 require(ggfortify)
-autoplot(survival::survfit(Surv(dfs_months, I(dfs_status == 'Recurred/Progressed')) ~ stage,data = md), conf.int = F)
+autoplot(survival::survfit(Surv(dfs_months, I(dfs_status == 'Recurred/Progressed')) ~ stage ,data = md), conf.int = F)
 #Imputation#
 md %>%
   VIM::aggr(prop = FALSE, combined = TRUE, numbers = TRUE, sortVars = TRUE, sortCombs = TRUE)
@@ -60,23 +60,24 @@ VIM::marginplot(md[c("ajcc_pathologic_tumor_stage","dfs_months")])
 table(md$ajcc_pathologic_tumor_stage, useNA = "always")
 #Following NPI and AJCC guidelines
 md$stage <- NA
-md$stage[grepl("I$|IA$|IB$",md$ajcc_pathologic_tumor_stage )] <- 1
-md$stage[grepl("II$|IIA$|IIB$",md$ajcc_pathologic_tumor_stage )] <- 2
-md$stage[grepl("IIIA$|IIIA$|IIIC|IV$|X$",md$ajcc_pathologic_tumor_stage )] <- 3
+md$stage[grepl("I$|IA$|IB$",md$ajcc_pathologic_tumor_stage )] <- "1"
+md$stage[grepl("II$|IIA$|IIB$",md$ajcc_pathologic_tumor_stage )] <- "2"
+md$stage[grepl("IIIA$|IIIA$|IIIC$",md$ajcc_pathologic_tumor_stage )] <- "3"
+md$stage[grepl("IV$|X$",md$ajcc_pathologic_tumor_stage )] <- "4"
 #using imputation by Bayesian poly regression
 tmp <- as.factor(md$stage)
 tmp <- mice::mice.impute.polyreg(y = tmp, 
                                  ry = !is.na(tmp),
-                                 x = model.matrix(~ ajcc_nodes_pathologic_pn + dfs_status,
+                            x = model.matrix(~ ajcc_nodes_pathologic_pn + dfs_status,
                                                   data = md)[,-1],
                                  wy = array(TRUE, dim = length(tmp)))
 md$stage[is.na(md$stage)] <- as.numeric(tmp[is.na(md$stage)])
 remove(tmp)
 
 md$nodes <- NA
-md$nodes[grepl("0",md$ajcc_nodes_pathologic_pn)] <- 1
-md$nodes[grepl("1",md$ajcc_nodes_pathologic_pn)] <- 2
-md$nodes[grepl("2|3|X",md$ajcc_nodes_pathologic_pn)] <- 3
+md$nodes[grepl("0",md$ajcc_nodes_pathologic_pn)] <- "1"
+md$nodes[grepl("1",md$ajcc_nodes_pathologic_pn)] <- "2"
+md$nodes[grepl("2|3|X",md$ajcc_nodes_pathologic_pn)] <- "3"
 
 
 #--- Gene matrix preprocess ----- #

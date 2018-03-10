@@ -14,10 +14,10 @@ gen_stan_data <- function(data, formula = as.formula(~ 1)) {
   Z <- data %>% 
     model.matrix(formula, data = . )
   M <- ncol(Z)
-  if (M > 1) {
-    if ("(Intercept)" %in% colnames(Z))
-    Z <- array(Z[,-1], dim = c(nrow(data), M - 1)) ; M <- M-1;
-    }
+  # if (M > 1) {
+  #   if ("(Intercept)" %in% colnames(Z))
+  #   Z <- array(Z[,-1], dim = c(nrow(data), M - 1)) ; M <- M-1;
+  #   }
   
   stan_data <- list(
     N = nrow(data),
@@ -43,11 +43,10 @@ gen_inits <- function(M){
       
       tau_s_cb_raw = 0.1*abs(rnorm(1)),
       tau_cb_raw = array(abs(rnorm(M)), dim = c(M)),
-      beta_clin_raw = array(rnorm(M), dim = c(M)),
-      b0 = rnorm(1)
+      beta_clin_raw = array(rnorm(M), dim = c(M))
     )
 }
- inits <- gen_inits(M = 2)
+ inits <- gen_inits(M = 3)
  rstan::stan_rdump(ls(inits), file = "checking.inits.R",
                    envir = list2env(inits))
 #-----Run Stan-------#

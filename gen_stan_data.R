@@ -39,14 +39,14 @@ gen_inits <- function(M){
     beta_clin_raw = array(rnorm(M), dim = c(M))
   )
 }
-inits <- gen_inits(M = 1)
+inits <- gen_inits(M = 6)
 rstan::stan_rdump(ls(inits), file = "checking.inits.R",
                   envir = list2env(inits))
 
 
 #---CLINICAL MODEL MO Update initial Values ---#
 gen_inits <- function(M){
-  function()
+  #function()
     list(
       alpha_raw = 0.01*rnorm(1),
       mu = rnorm(1, 0, 10),
