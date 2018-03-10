@@ -33,7 +33,7 @@ functions {
       return res;
   }
   //Horseshoe Prior
-  vector prior_hs(real r1_global, real r2_global, vector r1_local, vector r2_local, real nu_local, real scale_global, real nu_global){
+  vector prior_hs_lp(real r1_global, real r2_global, vector r1_local, vector r2_local, real nu_local, real scale_global, real nu_global){
     vector[num_elements(r1_local)] lambda;
     real tau;
     
@@ -57,17 +57,17 @@ functions {
     return r_global * sqrt_vec(r_local);
   }
   //Likelihood function for the cure model
-  real ptcm_log(vector yobs, vector v, vector beta_clin, matrix Z_clin, real alpha, real mu){
+  real ptcm_log(vector yobs, vector v, vector beta_c, vector beta_g, matrix Z_clin, matrix Z_gene, real alpha, real mu){
       real lpdf;
       real pdf;
       real cdf;
       real term1;
       real term2;
-      vector[num_elements(yobs)] prob;
+      real prob[num_elements(yobs)];
       vector[num_elements(yobs)] f;
       real lprob;
       
-      f = exp( Z_clin * beta_clin) ./ (1 + exp(Z_clin * beta_clin)); //link function
+      f = exp( Z_clin * beta_c + Z_gene * beta_g) ./ (1 + exp(Z_clin * beta_c + Z_gene * beta_g)); //link function
      
      for(i in 1:num_elements(yobs)){
         if( exp(-(mu) / alpha) <= 0 || exp(-(mu) / alpha) > 10e10 || alpha <= 0 || alpha > 10e10){
@@ -109,17 +109,17 @@ transformed data {
   
 parameters {
   real<lower=0> tau_s_cb_raw;
-  vector<lower=0>[M_clinical] tau_cb_raw;
-  vector[M_clinical] beta_clin_raw;
+  vector<lower=0>[M_c] tau_cb_raw;
+  vector[M_c] beta_c_raw;
 
   real alpha_raw;
   real mu;
   
   vector[M_g] beta_g_raw;
-  real<lower=0> r1_global;
-  real<lower=0> r2_global;
-  vector<lower=0>[M_g] r1_local;
-  vector<lower=0>[M_g] r2_local;
+  real<lower=0> tau1_global;
+  real<lower=0> tau2_global;
+  vector<lower=0>[M_g] tau1_local;
+  vector<lower=0>[M_g] tau2_local;
 }
   
 transformed parameters {
@@ -127,7 +127,7 @@ transformed parameters {
   vector[M_g] beta_g;
   real<lower=0> alpha;
   
-  beta_g = beta_g_raw .* prior_hs(r1_global, r2_global, r1_local, r2_local, nu_local, scale_global, nu_global);
+  beta_g = prior_hs_lp(tau1_global, tau2_global, tau1_local, tau2_local, nu_local, scale_global, nu_global) .* beta_g_raw ;
   
   beta_c = prior_lp(tau_s_cb_raw, tau_cb_raw) .* beta_c_raw;
   
@@ -143,26 +143,24 @@ model {
     
   mu ~ normal(0.0, tau_mu);
   
-  yobs ~ ptcm(v, beta_clin, Z_clin, alpha, mu);
+  yobs ~ ptcm(v, beta_c, beta_g, Z_clin,  Z_gene, alpha, mu);
 
 }
 
 generated quantities{
-    real yhat_uncensored[N];
+
     real log_lik[N];
-    real lp[N];
+    vector[N] lp;
     real lpdf;
     real pdf;
     real cdf;
     real term1;
     real term2;
-    real U;
 
-
+    //calculate lp
+    lp = exp( Z_clin * beta_c + Z_gene * beta_g) ./ (1 + exp(Z_clin * beta_c + Z_gene * beta_g)); 
+    
     for (i in 1:N) {
-      //calculate lp
-        lp[i] = exp( Z_clin[i,] * beta_clin) ./ (1 + exp(Z_clin[i,] * beta_clin)); 
-        
       //estimate log_lik
         lpdf = weibull_lpdf(yobs[i] | alpha, exp(-(mu) / alpha) );
         pdf = exp(lpdf);
@@ -171,9 +169,6 @@ generated quantities{
         term2 = exp(log(lp[i]) * cdf);
         log_lik[i] = log(term1^v[i] * term2);
         
-      //predict yhat
-        U = uniform_rng(lp[i],1);
-        yhat_uncensored[i] =  exp(-(mu) / alpha) * (- log(1 - (log(U) / log(lp[i])) ) )^(1/alpha);
     }
 }
 

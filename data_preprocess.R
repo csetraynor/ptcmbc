@@ -14,13 +14,13 @@ library(survival)
 
 sampledat <- read_tsv("brca_data/brca_tcga_pub2015/data_clinical_sample.txt", skip = 4)
 patientdat <- read_tsv("brca_data/brca_tcga_pub2015/data_clinical_patient.txt", skip = 4)
-gendat <- read_tsv("brca_data/brca_tcga_pub2015/data_mRNA_median_Zscores.txt", col_names = TRUE)
+gendat <- read_tsv("brca_data/brca_tcga_pub2015/data_expression_median.txt", col_names = TRUE)
 # Get an easier code to read
 names(sampledat) <- tolower(names(sampledat))
 names(patientdat) <- tolower(names(patientdat))
 md <- left_join(patientdat, sampledat) #joint clinical data
 rm(patientdat, sampledat)
-#md <- md %>% filter(sample_id %in% intersect(sample_id, colnames(gendat))) 
+md <- md %>% filter(sample_id %in% intersect(sample_id, colnames(gendat))) 
 #---- Data Cleaning ----#
 #convert missig values into NA
 convert_blank_to_na <- function(x) {
@@ -94,11 +94,19 @@ x <-  as.matrix(gendat) ;colnames(x) <- rownames(md)
 brcaES <- Biobase::ExpressionSet(x,
                                   phenoData = as(md, "AnnotatedDataFrame"),
                                  featureData = as(gene_names, "AnnotatedDataFrame"))
+#Imputation with the min value
 rm(x)
 require(MSnbase)
 brcaMSN <- MSnbase::as.MSnSet.ExpressionSet(brcaES)
 brcaMSN <- MSnbase::impute(brcaMSN, method = "min")
 Biobase::exprs(brcaES) <- MSnbase::exprs(brcaMSN)
 rm(brcaMSN)
-preProcgm <-  caret::preProcess(exprs(brcaES), method = c("center")) 
-exprs(brcaES) <- predict(preProcgm, exprs(brcaES)) #center
+sum(is.na(Biobase::exprs(brcaES)))
+
+#Obtain the Z scores
+preProcgm <-  caret::preProcess(exprs(brcaES), method = c("center", "scale")) 
+exprs(brcaES) <- predict(preProcgm, exprs(brcaES)) 
+
+gendat <- as.data.frame(t(exprs(brcaES)))
+gendat <- as.matrix(gendat %>% unlist, ncol = ncol(gendat))
+

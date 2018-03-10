@@ -145,5 +145,21 @@ pl <- pp_predict_surv(beta = pp_beta,
 pl + 
   xlim(NA, 300) +
   ggtitle('Posterior predictive checks \nfit to clinical data showing 90% CI')
-#----Fitting Model to TCGA Glioblastome data----#
+
+
+
+#-----Run Stan Horseshoe-------#
+library(rstan)
+options(mc.cores = parallel::detectCores())
+rstan_options(auto_write = TRUE)
+nChain <- 4
+stanfile <- 'ptcmbc/nmchs.stan'
+ph_fit <- stan(stanfile,
+               data = gen_stan_data(data = md, Eset = brcaES, formula ='~ stage + nodes' ),
+               init = gen_inits(M_clinical = 6, M_gene = 17213),
+               iter = 1000,
+               thin = 1,  
+               cores = min(nChain, parallel::detectCores()),
+               seed = 7327,
+               chains = nChain)
 
