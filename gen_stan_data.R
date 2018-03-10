@@ -56,3 +56,20 @@ gen_inits <- function(M){
       beta_clin_raw = array(rnorm(M), dim = c(M))
     )
 }
+
+#---CLINICAL MODEL with PH Update initial Values ---#
+gen_inits <- function(M){
+  function()
+  list(
+    alpha_raw = 0.01*rnorm(1),
+    mu = rnorm(1, 0, 10),
+    
+    tau_s_cb_raw = 0.1*abs(rnorm(1)),
+    tau_cb_raw = array(abs(rnorm(M)), dim = c(M)),
+    beta_clin_raw = array(rnorm(M), dim = c(M)),
+    
+    tau_s_cg_raw = 0.1*abs(rnorm(1)),
+    tau_cg_raw = array(abs(rnorm(M-1)), dim = c(M-1)),
+    gamma_clin_raw = array(rnorm(M-1), dim = c(M-1))
+  )
+}

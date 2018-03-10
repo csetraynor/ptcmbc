@@ -9,20 +9,23 @@ library(survival)
 # print(test_alpha)
 
 ## ----sim-data-function-----------------------------------------------
-fun_sim_data <- function(alpha, mu, N, b, icept, Z) {
+fun_sim_data <- function(alpha, mu, N, b, g, Z) {
+  b <- as.vector(b %>% unlist); g <- as.vector(g %>% unlist)
+  alpha <- as.numeric(alpha %>% unlist); mu <- as.numeric(mu %>% unlist)
 
-  b0 <- icept
-  risk <- Z %*% beta #prognostic index
-  f <- exp(b0 + risk) / (1 + exp(b0 + risk) ) #link function mixed model
+  assertthat::assert_that(length(g) == length(b) -1)
+  
+  lp <- Z %*% b #prognostic index
+  f <- exp(lp) / (1 + exp(lp) ) #link function mixed model
 
-  #p <- rbeta(N,1,1) 
+        #p <- rbeta(N,1,1) 
   #uncured = ifelse( p > f, T, F) #T: "uncured" F: "cured"
-  sigma <- exp( - (mu) / alpha)
+  sigma <- exp( - (mu + Z[,-1] %*% g) / alpha)
   U <- runif(N, min = f, max = 1) #for an inverse transform
   X =  sigma * (- log(1 - (log(U) / log(f)) ) )^(1/alpha) 
   
   data <- data.frame( dfs_months = X,
-                      censor_months = rexp(n = N, rate = 1/100),
+                      censor_months = runif(N, 0, 500),
                       #dfs_status = uncured,
                       lp = f,
                       stringsAsFactors = F) %>% 

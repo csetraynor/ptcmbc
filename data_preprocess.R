@@ -20,7 +20,7 @@ names(sampledat) <- tolower(names(sampledat))
 names(patientdat) <- tolower(names(patientdat))
 md <- left_join(patientdat, sampledat) #joint clinical data
 rm(patientdat, sampledat)
-md <- md %>% filter(sample_id %in% intersect(sample_id, colnames(gendat))) 
+#md <- md %>% filter(sample_id %in% intersect(sample_id, colnames(gendat))) 
 #---- Data Cleaning ----#
 #convert missig values into NA
 convert_blank_to_na <- function(x) {
@@ -48,7 +48,7 @@ md %>% ggplot(aes(x = dfs_months,
                   colour = dfs_status,
                   fill = dfs_status)) + geom_density(alpha = 0.5)
 require(ggfortify)
-autoplot(survival::survfit(Surv(dfs_months, I(dfs_status == 'Recurred/Progressed')) ~ stage ,data = md), conf.int = F)
+autoplot(survival::survfit(Surv(dfs_months, I(dfs_status == 'Recurred/Progressed')) ~ 1 ,data = md), conf.int = F)
 #Imputation#
 md %>%
   VIM::aggr(prop = FALSE, combined = TRUE, numbers = TRUE, sortVars = TRUE, sortCombs = TRUE)
