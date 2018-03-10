@@ -96,16 +96,16 @@ gen_stan_data <- function(data, Eset, formula = as.formula(~ 1), ... ) {
   attr(Z_gene, "dimnames") <- NULL
   M_gene <- ncol(Z_gene)
   
+  Z <- cbind(Z_clin, Z_gene)
+  M <- ncol(Z)
   
   
   stan_data <- list(
     N = nrow(data),
     yobs = as.numeric(data$dfs_months),
     v = as.numeric(data$dfs_progression),
-    M_c = M_clin,
-    M_g = M_gene,
-    Z_clin = Z_clin,
-    Z_gene = Z_gene,
+    M = M,
+    Z = Z,
     nu_global = 1, #1 gives Half-Cauchy Prior
     nu_local =1, #1 corresponds to Horseshoe prior
     scale_global = 0.0002 #corresponds to formulae
@@ -114,23 +114,20 @@ gen_stan_data <- function(data, Eset, formula = as.formula(~ 1), ... ) {
 
 into_data <- gen_stan_data(data = md, Eset = brcaES, formula ='~ stage + nodes' )
 into_data %>% glimpse
-
+rm(into_data)
 #---Horseshoe Update initial Values ---#
-gen_inits <- function(M_clinical, M_gene){
+gen_inits <- function(M){
   function()
   list(
     alpha_raw = 0.01*rnorm(1),
     mu = rnorm(1, 0, 10),
-    
-    tau_s_cb_raw = 0.1*abs(rnorm(1)),
-    tau_cb_raw = array(abs(rnorm(M_clinical)), dim = c(M_clinical)),
-    beta_clin_raw = array(rnorm(M_clinical), dim = c(M_clinical)),
+    beta0 = rnorm(1),
     
     tau1_global = 0.1*abs(rnorm(1)),
     tau2_global = 0.1*abs(rnorm(1)),
-    tau1_local = abs(rnorm(M_gene)),
-    tau2_local = abs(rnorm(M_gene)),
-    beta_g_raw = rnorm(M_gene)
+    tau1_local = abs(rnorm(M)),
+    tau2_local = abs(rnorm(M)),
+    beta_g_raw = rnorm(M)
   )
 }
 

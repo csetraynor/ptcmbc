@@ -28,15 +28,15 @@ rstan_options(auto_write = TRUE)
 nChain <- 4
 stanfile <- 'ptcmbc/nmcph.stan'
 ph_fit <- stan(stanfile,
-                data = gen_stan_data(md, '~ stage + nodes'),
-                init = gen_inits(M = 6),
-                iter = 1000,
-                thin = 1,  
-                cores = min(nChain, parallel::detectCores()),
-                seed = 7327,
-                chains = nChain)
- if (interactive())
-   shinystan::launch_shinystan(ph_fit)
+               data = gen_stan_data(md, '~ stage + nodes'),
+               init = gen_inits(M = 6),
+               iter = 1000,
+               thin = 1,  
+               cores = min(nChain, parallel::detectCores()),
+               seed = 7327,
+               chains = nChain)
+if (interactive())
+  shinystan::launch_shinystan(ph_fit)
 
 
 #---Posterior predictive checks---#
@@ -54,18 +54,18 @@ Z_clin <- as.matrix(into_data$Z_clin, ncol = into_data$M_clinical)
 pp_newdata <- 
   purrr::pmap(list(pp_beta, pp_gamma, pp_alpha, pp_mu),
               function(pp_beta, pp_gamma, pp_alpha, pp_mu) {fun_sim_data(
-                                                         b = pp_beta,
-                                                         g = pp_gamma, 
-                                                         alpha = pp_alpha,
-                                                         mu = pp_mu,
-                                                         N = nrow(md),
-                                                         Z = Z_clin)} )
+                b = pp_beta,
+                g = pp_gamma, 
+                alpha = pp_alpha,
+                mu = pp_mu,
+                N = nrow(md),
+                Z = Z_clin)} )
 ggplot(pp_newdata %>%
          dplyr::bind_rows() %>%
          dplyr::mutate(type = 'posterior predicted values') %>%
          bind_rows(md %>% dplyr::mutate(type = 'actual data')),
        aes(x = dfs_months, group = dfs_status,
-             colour = dfs_status, fill = dfs_status)) +
+           colour = dfs_status, fill = dfs_status)) +
   geom_density(alpha = 0.5) + xlim(c(0, 1000)) +
   facet_wrap(~type, ncol = 1)
 
@@ -74,15 +74,15 @@ pp_predict_surv <- function(beta, gamma, alpha, mu, N, Z,
                             plot = F, data = NULL,
                             fun_sim = fun_sim_data,
                             formula = as.formula(~1)) {
-
+  
   pp_newdata <- purrr::pmap(list(beta, gamma, alpha, mu),
-                function(beta, gamma, alpha, mu) {fun_sim(
-                  b = beta,
-                  g = gamma, 
-                  alpha = alpha,
-                  mu = mu,
-                  N = N,
-                  Z = Z)} )
+                            function(beta, gamma, alpha, mu) {fun_sim(
+                              b = beta,
+                              g = gamma, 
+                              alpha = alpha,
+                              mu = mu,
+                              N = N,
+                              Z = Z)} )
   
   pp_survdata <-
     pp_newdata %>%
@@ -163,4 +163,3 @@ hs_fit <- stan(stanfile,
                seed = 7327,
                chains = nChain,
                control = list(adapt_delta = 0.99))
-

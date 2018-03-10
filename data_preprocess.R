@@ -2,7 +2,7 @@ library(tidyverse)
 library(caret)
 library(cgdsr)
 library(survival)
-
+#memory.size(400000)
 #download data
 # require(cgdsr)
 # mycgds = CGDS("http://www.cbioportal.org/public-portal/")
@@ -94,6 +94,7 @@ x <-  as.matrix(gendat) ;colnames(x) <- rownames(md)
 brcaES <- Biobase::ExpressionSet(x,
                                   phenoData = as(md, "AnnotatedDataFrame"),
                                  featureData = as(gene_names, "AnnotatedDataFrame"))
+rm(gendat)
 #Imputation with the min value
 rm(x)
 require(MSnbase)
@@ -107,6 +108,4 @@ sum(is.na(Biobase::exprs(brcaES)))
 preProcgm <-  caret::preProcess(exprs(brcaES), method = c("center", "scale")) 
 exprs(brcaES) <- predict(preProcgm, exprs(brcaES)) 
 
-gendat <- as.data.frame(t(exprs(brcaES)))
-gendat <- as.matrix(gendat %>% unlist, ncol = ncol(gendat))
 
