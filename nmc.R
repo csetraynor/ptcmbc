@@ -16,7 +16,7 @@ fun_sim_data <- function(alpha, mu, N, b, g, Z) {
   assertthat::assert_that(length(g) == length(b) -1)
   
   lp <- Z %*% b #prognostic index
-  f <- exp(lp) / (1 + exp(lp) ) #link function mixed model
+  f <- 1 / (1 + exp(-lp) ) #link function mixed model
 
         #p <- rbeta(N,1,1) 
   #uncured = ifelse( p > f, T, F) #T: "uncured" F: "cured"

@@ -1,16 +1,10 @@
-library(tidyverse)
+library(dplyr)
+library(readr)
 library(caret)
-library(cgdsr)
+library(mice)
 library(survival)
 #memory.size(400000)
 #download data
-# require(cgdsr)
-# mycgds = CGDS("http://www.cbioportal.org/public-portal/")
-# study_list = getCancerStudies(mycgds)
-# brca15 = study_list[25,1]
-# brca15c = getCaseLists(mycgds, brca15)[2,1]
-# md <-  tbl_df(getClinicalData(mycgds, brca15c))
-# Frozen data from publication --- >
 
 sampledat <- read_tsv("brca_data/brca_tcga_pub2015/data_clinical_sample.txt", skip = 4)
 patientdat <- read_tsv("brca_data/brca_tcga_pub2015/data_clinical_patient.txt", skip = 4)
@@ -42,7 +36,6 @@ md <- md %>% filter(!is.na(dfs_status), dfs_months > 0) %>% #remove NA observati
   patient_id, sample_id, cancer_type_detailed, age, history_other_malignancy, ajcc_pathologic_tumor_stage, ajcc_nodes_pathologic_pn, histological_diagnosis, surgical_procedure_first, er_status_by_ihc, pr_status_by_ihc, dfs_status, dfs_months, her2_ihc_score
 ) %>% mutate_at(vars(c("age", "dfs_months")), funs(as.numeric))
 #Time to Event Distribution#
-
 md %>% ggplot(aes(x = dfs_months,
                   group = dfs_status,
                   colour = dfs_status,
@@ -68,10 +61,10 @@ md$stage[grepl("IV$|X$",md$ajcc_pathologic_tumor_stage )] <- "4"
 tmp <- as.factor(md$stage)
 tmp <- mice::mice.impute.polyreg(y = tmp, 
                                  ry = !is.na(tmp),
-                            x = model.matrix(~ ajcc_nodes_pathologic_pn + dfs_status,
+                            x = model.matrix(~ ajcc_nodes_pathologic_pn  + dfs_status,
                                                   data = md)[,-1],
                                  wy = array(TRUE, dim = length(tmp)))
-md$stage[is.na(md$stage)] <- as.numeric(tmp[is.na(md$stage)])
+md$stage[is.na(md$stage)] <- tmp[is.na(md$stage)]
 remove(tmp)
 
 md$nodes <- NA
@@ -83,18 +76,43 @@ md$nodes[grepl("2|3|X",md$ajcc_nodes_pathologic_pn)] <- "3"
 #--- Gene matrix preprocess ----- #
 library(Biobase)
 glimpse(gendat)
-gene_names <- gendat %>% select(Hugo_Symbol) #grap gene names
+gene_names <- gendat %>% select(Hugo_Symbol)  #grap gene names
 gendat <- gendat %>% select(intersect(colnames(gendat), md$sample_id))# get intersection with clinical and gene values
 sample_names <- colnames(gendat) # get sample names
 sum(is.na(gendat))
 
 #Convert to expression set
 md <- as.data.frame(md %>% filter(sample_id %in% sample_names) %>% slice(match(sample_names, sample_id))) ; row.names(md) <- md$sample_id#requires classical data frame
-x <-  as.matrix(gendat) ;colnames(x) <- rownames(md)
+x <-  as.matrix(gendat) ;colnames(x) <- rownames(md); 
+gene_names <- as.data.frame(gene_names);  rownames(gene_names) <- gene_names %>% unlist
 brcaES <- Biobase::ExpressionSet(x,
                                   phenoData = as(md, "AnnotatedDataFrame"),
                                  featureData = as(gene_names, "AnnotatedDataFrame"))
 rm(gendat)
+gene_names <- gene_names %>% unlist
+
+##Perform empirical Bayes to find differential gene expressions
+library(limma)
+fit <- limma::lmFit(brcaES)
+fit <- limma::eBayes(fit)
+### x is the input data. This function replaces the top 'perc' percent
+### with the value 'rp'. 
+perc=0.1
+qnt = quantile(fit$F.p.value, 1-perc)
+w = which(fit$F.p.value >= qnt)
+subset = (brcaES)[w]
+
+subset.top = function(x, perc, rp)
+{
+  qnt = quantile(x,1-perc)
+  w = which(x >= qnt) 
+  x[w] = rp
+  return(x)
+}
+# Treat relative to a 10% fold-change
+tfit <- treat(fit,lfc=log2(1.1))
+topTreat(tfit,coef=2)
+
 #Imputation with the min value
 rm(x)
 require(MSnbase)
@@ -105,7 +123,9 @@ rm(brcaMSN)
 sum(is.na(Biobase::exprs(brcaES)))
 
 #Obtain the Z scores
-preProcgm <-  caret::preProcess(exprs(brcaES), method = c("center", "scale")) 
-exprs(brcaES) <- predict(preProcgm, exprs(brcaES)) 
+preProcgm <-  caret::preProcess(t(exprs(brcaES)), method = c("center", "scale")) 
+brcaES <- predict(preProcgm, t(exprs(brcaES))) 
+rm(preProcgm)
+
 
 

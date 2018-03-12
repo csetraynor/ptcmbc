@@ -52,7 +52,7 @@ functions {
       vector[num_elements(yobs)] f;
       real lprob;
       
-      f = exp( Z_clin * beta_clin) ./ (1 + exp(Z_clin * beta_clin)); //link function
+      f = 1 ./ (1 + exp( -(Z_clin * beta_clin) )); //link function
      
      for(i in 1:num_elements(yobs)){
         if( exp(-(mu) / alpha) <= 0 || exp(-(mu) / alpha) > 10e10 || alpha <= 0 || alpha > 10e10){
@@ -131,7 +131,7 @@ generated quantities{
 
     for (i in 1:N) {
       //calculate lp
-        lp[i] = exp( Z_clin[i,] * beta_clin) ./ (1 + exp(Z_clin[i,] * beta_clin)); 
+        lp[i] = 1 ./ (1 + exp( -(Z_clin[i,] * beta_clin) )); 
         
       //estimate log_lik
         lpdf = weibull_lpdf(yobs[i] | alpha, exp(-(mu) / alpha) );

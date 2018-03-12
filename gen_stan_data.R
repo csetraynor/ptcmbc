@@ -13,6 +13,7 @@ gen_stan_data <- function(data, formula = as.formula(~ 1)) {
   
   Z <- data %>% 
     model.matrix(formula, data = . )
+
   M <- ncol(Z)
   
   stan_data <- list(
@@ -26,10 +27,9 @@ gen_stan_data <- function(data, formula = as.formula(~ 1)) {
 
 into_data <- gen_stan_data(md, '~ stage + nodes')
 into_data %>% glimpse
-
-
 rstan::stan_rdump(ls(into_data), file = "checking.data.R",
                   envir = list2env(into_data))
+rm(into_data)
 #---NULL MODEL Set initial Values ---#
 gen_inits <- function(M){
   function()
@@ -87,47 +87,50 @@ gen_stan_data <- function(data, Eset, formula = as.formula(~ 1), ... ) {
   
   Z_clin <- data %>% 
     model.matrix(formula, data = . )
-  attr(Z_clin, "dimnames") <- NULL
-  attr(Z_clin, "assign") <- NULL
-  attr(Z_clin, "contrasts") <- NULL
+  
   M_clin <- ncol(Z_clin)
   
-  Z_gene <- t(exprs(Eset))
-  attr(Z_gene, "dimnames") <- NULL
+  Z_gene <- Eset
+
   M_gene <- ncol(Z_gene)
-  
-  Z <- cbind(Z_clin, Z_gene)
-  M <- ncol(Z)
-  
   
   stan_data <- list(
     N = nrow(data),
     yobs = as.numeric(data$dfs_months),
     v = as.numeric(data$dfs_progression),
-    M = M,
-    Z = Z,
-    nu_global = 1, #1 gives Half-Cauchy Prior
+    M_c = M_clin,
+    M_g = M_gene,
+    Z_clin = Z_clin,
+    Z_gene = Z_gene,
+    nu_global = 100, #1 gives Half-Normal Prior
     nu_local =1, #1 corresponds to Horseshoe prior
-    scale_global = 0.0002 #corresponds to formulae
+    scale_global = 2e-3 #corresponds to formulae
   )
 }
 
 into_data <- gen_stan_data(data = md, Eset = brcaES, formula ='~ stage + nodes' )
 into_data %>% glimpse
+rstan::stan_rdump(ls(into_data), file = "checking.data.R",
+                  envir = list2env(into_data))
 rm(into_data)
 #---Horseshoe Update initial Values ---#
-gen_inits <- function(M){
-  function()
+gen_inits <- function(M_c, M_g){
+  #function()
   list(
     alpha_raw = 0.01*rnorm(1),
     mu = rnorm(1, 0, 10),
-    beta0 = rnorm(1),
+    
+    tau_s_cb_raw = 0.1*abs(rnorm(1)),
+    tau_cb_raw = abs(rnorm(M_c)),
+    beta_c_raw = rnorm(M_c),
     
     tau1_global = 0.1*abs(rnorm(1)),
     tau2_global = 0.1*abs(rnorm(1)),
-    tau1_local = abs(rnorm(M)),
-    tau2_local = abs(rnorm(M)),
-    beta_g_raw = rnorm(M)
+    tau1_local = abs(rnorm(M_g)),
+    tau2_local = abs(rnorm(M_g)),
+    beta_g_raw = rnorm(M_g)
   )
 }
-
+inits <- gen_inits(M_c = 6, M_g = 1000)
+rstan::stan_rdump(ls(inits), file = "checking.inits.R",
+                  envir = list2env(inits))
