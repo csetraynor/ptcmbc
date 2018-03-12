@@ -3,7 +3,7 @@ library(readr)
 library(caret)
 library(mice)
 library(survival)
-#memory.size(400000)
+memory.size(4000000)
 #download data
 
 sampledat <- read_tsv("brca_data/brca_tcga_pub2015/data_clinical_sample.txt", skip = 4)
@@ -22,7 +22,7 @@ convert_blank_to_na <- function(x) {
     warning('input variate not character - return original')
     return(x)
   } else {
-    ifelse(x == "[Not Available]" , NA, x)
+    ifelse(x == "[Not Available]" | x == "[Discrepancy]", NA, x)
   }
 }
 md <- md %>% dplyr::mutate_all(funs(convert_blank_to_na))
@@ -61,7 +61,7 @@ md$stage[grepl("IV$|X$",md$ajcc_pathologic_tumor_stage )] <- "4"
 tmp <- as.factor(md$stage)
 tmp <- mice::mice.impute.polyreg(y = tmp, 
                                  ry = !is.na(tmp),
-                            x = model.matrix(~ ajcc_nodes_pathologic_pn  + dfs_status,
+                            x = model.matrix(~ ajcc_nodes_pathologic_pn  + dfs_status + cancer_type_detailed +dfs_months,
                                                   data = md)[,-1],
                                  wy = array(TRUE, dim = length(tmp)))
 md$stage[is.na(md$stage)] <- tmp[is.na(md$stage)]
@@ -72,8 +72,33 @@ md$nodes[grepl("0",md$ajcc_nodes_pathologic_pn)] <- "1"
 md$nodes[grepl("1",md$ajcc_nodes_pathologic_pn)] <- "2"
 md$nodes[grepl("2|3|X",md$ajcc_nodes_pathologic_pn)] <- "3"
 
+#--- Impute er_status and pr_status
+md$erandpr <- "Negative"
+md$erandpr[md$er_status_by_ihc == "Positive" & md$pr_status_by_ihc == "Positive"] <- "Positive"
+md$erandpr[is.na(md$er_status_by_ihc) | md$pr_status_by_ihc == "Indeterminate"] <- NA
+
+
+tmp <- as.factor(md$erandpr)
+VIM::marginplot(md[c("erandpr","dfs_months")])
+tmp <- mice::mice.impute.polyreg(y = tmp, 
+                                 ry = !is.na(tmp),
+                                 x = model.matrix(~dfs_status+ 
+                                                    cancer_type_detailed + dfs_months ,
+                                                  data = md)[,-1],
+                                 wy = array(TRUE, dim = length(tmp)))
+md$erandpr[is.na(md$erandpr)] <- tmp[is.na(md$erandpr)]
+remove(tmp)
+
+#--- Impute HER2 score
+md$her2_ihc_score[is.na(md$her2_ihc_score)] <- "NA"
+
+#--- Cancer type
+md$type <- as.numeric(as.factor(md$cancer_type_detailed))
+
+
 
 #--- Gene matrix preprocess ----- #
+source("https://bioconductor.org/biocLite.R")
 library(Biobase)
 glimpse(gendat)
 gene_names <- gendat %>% select(Hugo_Symbol)  #grap gene names
@@ -88,36 +113,34 @@ gene_names <- as.data.frame(gene_names);  rownames(gene_names) <- gene_names %>%
 brcaES <- Biobase::ExpressionSet(x,
                                   phenoData = as(md, "AnnotatedDataFrame"),
                                  featureData = as(gene_names, "AnnotatedDataFrame"))
-rm(gendat)
+rm(list = c("gendat", "x"))
 gene_names <- gene_names %>% unlist
 
 ##Perform empirical Bayes to find differential gene expressions
 library(limma)
 fit <- limma::lmFit(brcaES)
 fit <- limma::eBayes(fit)
+
 ### x is the input data. This function replaces the top 'perc' percent
 ### with the value 'rp'. 
 perc=0.1
-qnt = quantile(fit$F.p.value, 1-perc)
-w = which(fit$F.p.value >= qnt)
+qnt = quantile(fit$lods, 1-perc)
+w = which(fit$lods >= qnt)
 subset = (brcaES)[w]
 
-subset.top = function(x, perc, rp)
+subset.top = function(x, perc, eset)
 {
-  qnt = quantile(x,1-perc)
-  w = which(x >= qnt) 
-  x[w] = rp
-  return(x)
+  qnt = quantile(x$lods,1-perc)
+  w = which(fit$lods >= qnt) 
+  return(eset[w])
 }
-# Treat relative to a 10% fold-change
-tfit <- treat(fit,lfc=log2(1.1))
-topTreat(tfit,coef=2)
+brcaES = subset.top(x = fit, perc = .1 , eset = brcaES)
+
 
 #Imputation with the min value
-rm(x)
 require(MSnbase)
 brcaMSN <- MSnbase::as.MSnSet.ExpressionSet(brcaES)
-brcaMSN <- MSnbase::impute(brcaMSN, method = "min")
+brcaMSN <- MSnbase::impute(brcaMSN, method = "MinDet")
 Biobase::exprs(brcaES) <- MSnbase::exprs(brcaMSN)
 rm(brcaMSN)
 sum(is.na(Biobase::exprs(brcaES)))

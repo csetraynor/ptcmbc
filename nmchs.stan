@@ -161,13 +161,11 @@ model {
 
 generated quantities{
 
-    real log_lik[N];
-    vector[N] lp;
-    real lpdf;
+    real log_lik[N]; //log likelihood
+    vector[N] lp;  //link function
+    real lpdf; //log pdf
     real pdf;
     real cdf;
-    real term1;
-    real term2;
 
     //calculate lp
     lp = 1 ./ (1 + exp( - (Z * beta) )); 
@@ -176,13 +174,12 @@ generated quantities{
       //estimate log_lik
         lpdf = weibull_lpdf(yobs[i] | alpha, exp(-(mu) / alpha) );
         pdf = exp(lpdf);
-        term1 = - (log(lp[i]))*pdf;
         cdf = weibull_cdf(yobs[i], alpha, exp(-(mu) / alpha) );
-        term2 = exp(log(lp[i]) * cdf);
-        log_lik[i] = log(term1^v[i] * term2);
+        log_lik[i] = log((- (log(lp[i]))*pdf)^v[i] * (exp(log(lp[i]) * cdf)));
         
     }
 }
+
 
 
           

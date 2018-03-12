@@ -53,7 +53,7 @@ functions {
       vector[num_elements(yobs)] s;
       real lprob;
       
-      f = exp( Z_clin * beta_clin) ./ (1 + exp(Z_clin * beta_clin)); //link function
+      f = 1 ./ (1 + exp( - (Z_clin * beta_clin) )); //link function
       s = exp( -(mu + Z_clin[,2:] * gamma_clin) / alpha); 
      
      for(i in 1:num_elements(yobs)){
@@ -130,7 +130,6 @@ model {
 }
 
 generated quantities{
-    real yhat_uncensored[N];
     real log_lik[N];
     vector[N] lp;
     vector[N] s; //sigma
@@ -139,10 +138,9 @@ generated quantities{
     real cdf;
     real term1;
     real term2;
-    real U;
 
     //calculate lp
-    lp = exp( Z_clin * beta_clin) ./ (1 + exp(Z_clin * beta_clin)); 
+    lp = 1 ./ (1 + exp( - (Z_clin * beta_clin) )); 
     s = exp( -(mu + Z_clin[,2:] * gamma_clin) / alpha); 
 
     for (i in 1:N) {
@@ -154,11 +152,9 @@ generated quantities{
         term2 = exp(log(lp[i]) * cdf);
         log_lik[i] = log(term1^v[i] * term2);
         
-      //predict yhat
-        U = uniform_rng(lp[i],1);
-        yhat_uncensored[i] =  s[i] * (- log(1 - (log(U) / log(lp[i])) ) )^(1/alpha);
     }
 }
+
 
 
           

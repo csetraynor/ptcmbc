@@ -1,16 +1,32 @@
-#-----Run Stan-------#
+library(loo)
 library(rstan)
+library(ggplot2)
+theme_set(theme_bw())
+#-----Run Stan NULL model -------#
 options(mc.cores = parallel::detectCores())
 rstan_options(auto_write = TRUE)
-nChain <- 2
-stanfile <- 'ptcmbc/nmc_loglik.stan'
-sim_fit <- stan(stanfile,
-                data = gen_stan_data(md, '~ stage + nodes'),
-                init = gen_inits(M = 3),
+nChain <- 4
+stanfile <- 'ptcmbc/null.stan'
+nmc_fit2 <- stan(stanfile,
+                 data = gen_stan_data(md, ~ 1),
+                 init = gen_inits(),
+                 iter = 2000,
+                 thin = 1,  
+                 cores = min(nChain, parallel::detectCores()),
+                 chains = nChain)
+
+
+#-----Run Stan non mixed cure model -------#
+options(mc.cores = parallel::detectCores())
+rstan_options(auto_write = TRUE)
+nChain <- 1
+stanfile <- 'ptcmbc/nmc.stan'
+nmc_fit2 <- stan(stanfile,
+                data = gen_stan_data(md, '~ stage + nodes + erandpr'),
+                init = gen_inits(M = 7),
                 iter = 2000,
                 thin = 1,  
                 cores = min(nChain, parallel::detectCores()),
-                seed = 7327,
                 chains = nChain)
 
 
@@ -28,18 +44,35 @@ rstan_options(auto_write = TRUE)
 nChain <- 4
 stanfile <- 'ptcmbc/nmcph.stan'
 ph_fit <- stan(stanfile,
-               data = gen_stan_data(md, '~ stage + nodes'),
+             data = gen_stan_data(md, '~ stage + nodes'),
                init = gen_inits(M = 6),
-               iter = 1000,
+               iter = 2000,
                thin = 1,  
                cores = min(nChain, parallel::detectCores()),
-               seed = 7327,
                chains = nChain)
 if (interactive())
   shinystan::launch_shinystan(ph_fit)
 
+#-----Run Stan Horseshoe-------#
+library(rstan)
+options(mc.cores = parallel::detectCores())
+rstan_options(auto_write = TRUE)
+nChain <- 1
+stanfile <- 'ptcmbc/nmchs.stan'
+hs_fit <- stan(stanfile,
+               data = gen_stan_data(data = md, Eset = brcaES, formula ='~ stage + nodes' ),
+               init = gen_inits(M_c = 6, M_g = 1722),
+               iter = 2000,
+               thin = 1,  
+               cores = min(nChain, parallel::detectCores()),
+               chains = nChain)
+  
+               
+                            # control = list(adapt_delta = 0.99))
+
 
 #---Posterior predictive checks---#
+
 pp_beta <- as.data.frame.array(rstan::extract(ph_fit,pars = 'beta_clin', permuted = TRUE)$beta_clin) 
 pp_gamma <- as.data.frame.array(rstan::extract(ph_fit,pars = 'gamma_clin', permuted = TRUE)$gamma_clin)
 pp_alpha <- as.data.frame.array(rstan::extract(ph_fit,pars = 'alpha', permuted = TRUE)$alpha) 
@@ -148,18 +181,41 @@ pl +
 
 
 
-#-----Run Stan Horseshoe-------#
-library(rstan)
-options(mc.cores = parallel::detectCores())
-rstan_options(auto_write = TRUE)
-nChain <- 4
-stanfile <- 'ptcmbc/nmchs.stan'
-hs_fit <- stan(stanfile,
-               data = gen_stan_data(data = md, Eset = brcaES, formula ='~ stage + nodes' ),
-               init = gen_inits(M_clinical = 6, M_gene = 17213),
-               iter = 2000,
-               thin = 1,  
-               cores = min(nChain, parallel::detectCores()),
-               seed = 7327,
-               chains = nChain,
-               control = list(adapt_delta = 0.99))
+#---- LOO ----#
+#Extract log likelihood
+log_liknull <- loo::extract_log_lik(nullfit, parameter_name = "log_lik")
+log_lik1 <- loo::extract_log_lik(nmc_fit1, parameter_name = "log_lik")
+log_likph <- loo::extract_log_lik(ph_fit, parameter_name = "log_lik")
+log_likhs <- loo::extract_log_lik(hs_fit, parameter_name = "log_lik")
+
+#Compute loo
+lwnull <- loo(log_liknull)
+lw1 <- loo(log_lik1)
+lwph <- loo(log_likph)
+lwhs <- loo(log_likhs)
+
+print(lw1)
+print(lwph)
+print(lwhs)
+
+dif <- compare(lw1, lwhs)
+print(dif)
+
+#Compute WAIC
+wnull <- waic(log_liknull)
+w1 <- waic(log_lik1)
+wph <- waic(log_likph)
+
+
+
+plot_data <- rbind(tbl_df(w1$pointwise) %>% mutate(model = "Cure"),
+                   tbl_df(wph$pointwise) %>% mutate(model = "PH"))
+
+
+
+lw1$pointwise %>%
+  ggplot(aes(x = "identity",elpd_loo)) + geom_boxplot()
+
+
+  geom_abline(slope = 0, intercept = median(nullM[,1])) 
+

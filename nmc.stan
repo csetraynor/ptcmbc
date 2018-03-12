@@ -118,32 +118,27 @@ model {
 }
 
 generated quantities{
-    real yhat_uncensored[N];
     real log_lik[N];
     real lp[N];
     real lpdf;
     real pdf;
     real cdf;
-    real term1;
-    real term2;
-    real U;
+
 
 
     for (i in 1:N) {
+      
       //calculate lp
         lp[i] = 1 ./ (1 + exp( -(Z_clin[i,] * beta_clin) )); 
         
       //estimate log_lik
         lpdf = weibull_lpdf(yobs[i] | alpha, exp(-(mu) / alpha) );
         pdf = exp(lpdf);
-        term1 = - (log(lp[i]))*pdf;
+
         cdf = weibull_cdf(yobs[i], alpha, exp(-(mu) / alpha) );
-        term2 = exp(log(lp[i]) * cdf);
-        log_lik[i] = log(term1^v[i] * term2);
+
+        log_lik[i] = log((- (log(lp[i]))*pdf)^v[i] * (exp(log(lp[i]) * cdf)));
         
-      //predict yhat
-        U = uniform_rng(lp[i],1);
-        yhat_uncensored[i] =  exp(-(mu) / alpha) * (- log(1 - (log(U) / log(lp[i])) ) )^(1/alpha);
     }
 }
 
