@@ -38,6 +38,8 @@ gen_stan_data <- function(data, formula = as.formula(~ 1)) {
   
   Z <- data %>% 
     model.matrix(formula, data = . )
+  prop <- apply(Z_clin[,-1], 2, sum) / apply(Z_clin[,-1], 2, length) 
+  Z_clin[,-1] <- sweep(Z_clin[,-1], 2, prop)
 
   M <- ncol(Z)
   
@@ -105,6 +107,8 @@ gen_stan_data <- function(data, Eset, formula = as.formula(~ 1), ... ) {
   
   Z_clin <- data %>% 
     model.matrix(formula, data = . )
+  prop <- apply(Z_clin[,-1], 2, sum) / apply(Z_clin[,-1], 2, length) 
+  Z_clin[,-1] <- sweep(Z_clin[,-1], 2, prop)
   
   M_clin <- ncol(Z_clin)
   

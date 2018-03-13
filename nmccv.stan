@@ -72,11 +72,14 @@ functions {
 }
 
 data {
-  int<lower=0> N;
+  int<lower=0> N_t;  //training N
   int<lower=0> M_clinical;
-  vector[N] yobs;   // observed time    
-  vector[N] v;    //censor indicator
-  matrix[N, M_clinical] Z_clin;
+  vector[N_t] yobs_t;   // observed time (Training)
+  vector[N_t] v_t;    //censor indicator (Training)
+  matrix[N_t, M_clinical] Z_clin_t;
+  int<lower=0> N_h;  //(Holdout)
+  vector[N_h] yobs_h;   //(Holdout)
+  matrix[N_h, M_clinical] Z_clin_h; //(Holdout)
 }
   
 transformed data {
@@ -116,13 +119,13 @@ model {
   yobs ~ ptcm(v, beta_clin, Z_clin, alpha, mu);
 
 }
-
 generated quantities{
     real log_lik[N];
     real lp[N];
     real lpdf;
     real pdf;
     real cdf;
+    
     for (i in 1:N) {
       //calculate lp
         lp[i] = 1 ./ (1 + exp( -(Z_clin[i,] * beta_clin) )); 
