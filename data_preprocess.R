@@ -3,7 +3,7 @@ library(readr)
 library(caret)
 library(mice)
 library(survival)
-memory.size(4000000)
+memory.size(400000000)
 #download data
 
 sampledat <- read_tsv("brca_data/brca_tcga_pub2015/data_clinical_sample.txt", skip = 4)
@@ -95,7 +95,7 @@ md$her2_ihc_score[is.na(md$her2_ihc_score)] <- "NA"
 #--- Cancer type
 md$type <- as.numeric(as.factor(md$cancer_type_detailed))
 
-
+#----Download Metabric Data
 
 #--- Gene matrix preprocess ----- #
 source("https://bioconductor.org/biocLite.R")
@@ -113,34 +113,35 @@ gene_names <- as.data.frame(gene_names);  rownames(gene_names) <- gene_names %>%
 brcaES <- Biobase::ExpressionSet(x,
                                   phenoData = as(md, "AnnotatedDataFrame"),
                                  featureData = as(gene_names, "AnnotatedDataFrame"))
+assertthat::assert_that(all(md$patient_id == brcaES$patient_id))
 rm(list = c("gendat", "x"))
 gene_names <- gene_names %>% unlist
 
 ##Perform empirical Bayes to find differential gene expressions
-library(limma)
-fit <- limma::lmFit(brcaES)
-fit <- limma::eBayes(fit)
-
-### x is the input data. This function replaces the top 'perc' percent
-### with the value 'rp'. 
-perc=0.1
-qnt = quantile(fit$lods, 1-perc)
-w = which(fit$lods >= qnt)
-subset = (brcaES)[w]
-
-subset.top = function(x, perc, eset)
-{
-  qnt = quantile(x$lods,1-perc)
-  w = which(fit$lods >= qnt) 
-  return(eset[w])
-}
-brcaES = subset.top(x = fit, perc = .1 , eset = brcaES)
+# library(limma)
+# fit <- limma::lmFit(brcaES)
+# fit <- limma::eBayes(fit)
+# 
+# ### x is the input data. This function replaces the top 'perc' percent
+# ### with the value 'rp'. 
+# perc=0.2
+# qnt = quantile(fit$lods, 1-perc)
+# w = which(fit$lods >= qnt)
+# subset = (brcaES)[w]
+# 
+# subset.top = function(x, perc, eset)
+# {
+#   qnt = quantile(x$lods,1-perc)
+#   w = which(fit$lods >= qnt) 
+#   return(eset[w])
+# }
+# brcaES = subset.top(x = fit, perc = .1 , eset = brcaES)
 
 
 #Imputation with the min value
 require(MSnbase)
 brcaMSN <- MSnbase::as.MSnSet.ExpressionSet(brcaES)
-brcaMSN <- MSnbase::impute(brcaMSN, method = "MinDet")
+brcaMSN <- MSnbase::impute(brcaMSN, method = "MinProb")
 Biobase::exprs(brcaES) <- MSnbase::exprs(brcaMSN)
 rm(brcaMSN)
 sum(is.na(Biobase::exprs(brcaES)))

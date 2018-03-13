@@ -49,30 +49,31 @@ functions {
 
 data {
   int<lower=0> N_t;  //training N
-  int<lower=0> M_clinical;
   vector[N_t] yobs_t;   // observed time (Training)
   vector[N_t] v_t;    //censor indicator (Training)
-  matrix[N_t, M_clinical] Z_clin_t;
-  vector[N_t] icept_t;
-  vector[N] type;  //cancer type
   
   int<lower=0> N_h;  //(Holdout)
   vector[N_h] yobs_h;   //(Holdout)
-  matrix[N_h, M_clinical] Z_clin_h; //(Holdout)
   vector[N_h] v_h;    //censor indicator (Training)
-  vector[N_h] icept_h;
 }
   
 transformed data {
   real<lower=0> tau_al;
   real<lower=0> tau_mu;
+  vector[N_t] icept_t;
+  vector[N_h] icept_h;
 
   tau_al = 10.0;
   tau_mu = 10.0;
+  for (i in 1:N_t){
+     icept_t[i] = 1; 
+  }
+  for (i in 1:N_h){
+     icept_h[i] = 1; 
+  }
 }
   
 parameters {
-  vector[M_clinical] beta_clin;
   real beta0;
 
   real alpha_raw;
@@ -87,15 +88,13 @@ transformed parameters {
   
   alpha = exp(tau_al * alpha_raw);
   sigma = exp(-(mu) / alpha);
-  lf_t = 1 ./ (1 + exp( -(icept_t * beta0 + Z_clin_t * beta_clin) )); //link function
+  lf_t = 1 ./ (1 + exp( -(icept_t * beta0) )); //link function
   
 }
   
 model {
  
   beta0 ~ cauchy(0.0, 10.0);
-  
-  beta_clin ~ cauchy(0.0, 2.5);
 
   alpha_raw ~ normal(0.0, 1.0);
     
@@ -122,7 +121,7 @@ generated quantities{
     }
     
     //calculate lf_h
-    lf_h = 1 ./ (1 + exp( -(icept_h * beta0 +  Z_clin_h * beta_clin) )); 
+    lf_h = 1 ./ (1 + exp( -(icept_h * beta0) )); 
     //loglik holdout
     for (i in 1:N_h) {
       //estimate log_lik
