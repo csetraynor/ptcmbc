@@ -116,40 +116,38 @@ brcaES <- Biobase::ExpressionSet(x,
 assertthat::assert_that(all(md$patient_id == brcaES$patient_id))
 rm(list = c("gendat", "x"))
 gene_names <- gene_names %>% unlist
-
-##Perform empirical Bayes to find differential gene expressions
-# library(limma)
-# fit <- limma::lmFit(brcaES)
-# fit <- limma::eBayes(fit)
-# 
-# ### x is the input data. This function replaces the top 'perc' percent
-# ### with the value 'rp'. 
-# perc=0.2
-# qnt = quantile(fit$lods, 1-perc)
-# w = which(fit$lods >= qnt)
-# subset = (brcaES)[w]
-# 
-# subset.top = function(x, perc, eset)
-# {
-#   qnt = quantile(x$lods,1-perc)
-#   w = which(fit$lods >= qnt) 
-#   return(eset[w])
-# }
-# brcaES = subset.top(x = fit, perc = .1 , eset = brcaES)
-
-
-#Imputation with the min value
+#Imputation using MSnbase
 require(MSnbase)
 brcaMSN <- MSnbase::as.MSnSet.ExpressionSet(brcaES)
-brcaMSN <- MSnbase::impute(brcaMSN, method = "MinProb")
+brcaMSN <- MSnbase::impute(brcaMSN, method = "knn")
 Biobase::exprs(brcaES) <- MSnbase::exprs(brcaMSN)
 rm(brcaMSN)
 sum(is.na(Biobase::exprs(brcaES)))
 
-#Obtain the Z scores
+##Perform empirical Bayes to find differential gene expressions
+library(limma)
+fit <- limma::eBayes(limma::lmFit(brcaES))
+volcanoplot(fit)
+# toptable(fit)
+# # 
+rm(fit)
+#Center and scale 
 preProcgm <-  caret::preProcess(t(exprs(brcaES)), method = c("center", "scale")) 
 brcaES <- predict(preProcgm, t(exprs(brcaES))) 
 rm(preProcgm)
 
+# # ### x is the input data. This function replaces the top 'perc' percent
+# # ### with the value 'rp'. 
+# # 
+# subset.top = function(x, perc, eset)
+# {
+#   qnt = quantile(x$lods,1-perc)
+#   w = which(fit$lods >= qnt)
+#   return(eset[w])
+# }
+# brcaEStest = subset.top(x = fit, perc = .2 , eset = brcaES)
+# volcanoplot(fit)
+# fit_gene_names = rownames(brcaEStest)
+# rm(fit)
 
 

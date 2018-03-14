@@ -38,7 +38,7 @@ functions {
           lpdf = weibull_lpdf(yobs[i] | alpha, sigma);
           pdf = exp(lpdf);
           term1 = - (log(lf[i]))*pdf;
-          cdf = weibull_cdf(yobs[i], alpha, sigma );
+          cdf = weibull_cdf(yobs[i], alpha, sigma);
           term2 = exp(log(lf[i]) * cdf);
           prob[i] = term1^v[i] * term2;
         }
@@ -50,22 +50,26 @@ functions {
 data {
   int<lower=0> N;  //training N
   int<lower=0> J; //cluster of cancer
+  int<lower=0> M; //number of clinical covariates
   vector[N] yobs;   // observed time (Training)
   vector[N] v;    //censor indicator (Training)
+  matrix[N, M] Z_c; //matrix of covariate values
   int type[N];    //cancer type
   
 }
   
 transformed data {
   real<lower=0> tau_al;
-  real<lower=0> tau_mu;
   vector[N] icept;
-
-  tau_al = 10.0;
+  real<lower=0> tau_mu;
+  
   tau_mu = 10.0;
+  tau_al = 10.0;
+
   for (i in 1:N){
      icept[i] = 1; 
   }
+
 }
   
 parameters {
@@ -73,35 +77,35 @@ parameters {
   real loc0; //b0 expectation
   real<lower=0> s0; //b0 scale
   
+  vector[M] beta_c;
+
   real alpha_raw;
   real mu;
-    
+  
 }
   
 transformed parameters {
   real<lower=0> alpha;
-  real<lower=1e-10> sigma;
-  vector<lower=1e-10>[N] lf;
-  
+  real<lower=0> sigma;
+  vector<lower=0, upper=1>[N] lf;
+    
   alpha = exp(tau_al * alpha_raw);
   sigma = exp(-(mu) / alpha);
+  
   for (i in 1:N){
-    lf[i]=1 ./ (1 +exp(-(icept[i]*beta0[type[i]]))); //link function 
+    lf[i]=1 ./ (1 +exp(-(icept[i]*beta0[type[i]]+ Z_c[i,]*beta_c))); //link function 
   }
 }
   
 model {
- 
   beta0 ~ cauchy(loc0 , s0);
-  
   loc0 ~ normal(0 ,1);
-  
   s0 ~ exponential(.2);
+  beta_c ~ student_t(5, 0, 2.5);
 
   alpha_raw ~ normal(0.0, 1.0);
-    
-  mu ~ normal(0.0, tau_mu);
   
+  mu ~ normal(0.0, tau_mu);
   yobs ~ ptcm(v, lf, alpha, sigma);
 
 }

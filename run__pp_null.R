@@ -29,7 +29,6 @@ gen_inits <- function(J){
   function()
     list(
       alpha_raw = 0.01*rnorm(1),
-      mu = rnorm(1, 0, 10),
       
       beta0 = rnorm(J),
       loc0 = rnorm(1),
@@ -40,11 +39,11 @@ gen_inits <- function(J){
 ################################################################
 
 ##Run Stan
-stan_file <- "ptcmbc/nmcnullml.stan"
+stan_file <- "ptcmbc/Hierarchical/nmcnullml.stan"
 
 options(mc.cores = parallel::detectCores())
 rstan_options(auto_write = TRUE)
-nChain <- 1
+nChain <- 4
 
 stanfit <- rstan::stan(stan_file,
                          data = gen_stan_data(md,
@@ -52,7 +51,6 @@ stanfit <- rstan::stan(stan_file,
                          cores = min(nChain, parallel::detectCores()),
                          chains = nChain,
                          iter = 2000,
-                         init = gen_inits(J = 4)
-)
-
+                         init = gen_inits(J = 4))
+save(stanfit, file = "NullModel.Rdata")
 

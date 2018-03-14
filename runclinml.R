@@ -32,7 +32,7 @@ gen_stan_data <- function(data, formula = as.formula(~ 1), varoi = NULL) {
       varm = varm[,-1] #deselect intercept 
     }
   }
-
+  
   stan_data <- list(
     N = nrow(data),
     yobs = as.numeric(data$dfs_months),
@@ -40,18 +40,13 @@ gen_stan_data <- function(data, formula = as.formula(~ 1), varoi = NULL) {
     M = M,
     Z_c = array(Z, dim = c(nrow(data), M)),
     J = dplyr::n_distinct(data$type),
-    type = data$type,
-    varOI = as.numeric(varm)
+    type = data$type
   )
 }
 
 gen_stan_data(md,
-              formula =  '~ stage + nodes', varoi = "erandpr") %>%glimpse
+              formula =  '~ stage + nodes + erandpr') %>%glimpse
 
-into_data <- gen_stan_data(md,
-                        formula =  '~ stage + nodes', varoi = "erandpr")
-rstan::stan_rdump(ls(into_data), file = "checking.data.R",
-                  envir = list2env(into_data))
 #---Update inits----#
 gen_inits <- function(J,M){
   function()
@@ -62,12 +57,8 @@ gen_inits <- function(J,M){
       
       beta0 = rnorm(J),
       loc0 = rnorm(1),
-      s0 = abs(rnorm(1)),
+      s0 = abs(rnorm(1))
       
-      betaI = rnorm(1),
-      locI = rnorm(1),
-      sI = abs(rnorm(J))
- 
     )
 }
 inits <- gen_inits(M = 5, J = 4)
@@ -75,26 +66,22 @@ rstan::stan_rdump(ls(inits), file = "checking.init.R",
                   envir = list2env(inits))
 ################################################################
 ##Run Stan
-stan_file <- "ptcmbc/Hierarchical/nmclinicalml.stan"
+stan_file <- "ptcmbc/Hierarchical/clinml.stan"
 
 options(mc.cores = parallel::detectCores())
 rstan_options(auto_write = TRUE)
 nChain <- 4
 
 stanfit <- rstan::stan(stan_file,
-                         data = gen_stan_data(md,
-                                              formula =  '~ stage + nodes +erandpr',
-                                              varoi = "erandpr") ,
-                         cores = min(nChain, parallel::detectCores()),
-                         chains = nChain,
-                         iter = 4000,
-                         init = gen_inits(M = 5, J = 4))
+                       data = gen_stan_data(md,
+                                            formula =  '~ stage + nodes + erandpr'),
+                                            cores = min(nChain, parallel::detectCores()),
+                                            chains = nChain,
+                                            iter = 2000,
+                                            init = gen_inits(M = 6, J = 4))
+                      
+                       
+save(stanfit, file = "clinicalFit.Rdata")
 
-rstan::traceplot(stanfit, c('lp__'))
-rstan::traceplot(stanfit, c('betaOI'))
-
-save(stanfit,  file = "CureModel.Rdata", pars = "betaOI")
-
- if (interactive())
-   shinystan::launch_shinystan(stanfit)
-
+                       
+                       
