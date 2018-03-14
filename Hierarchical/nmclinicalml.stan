@@ -25,7 +25,7 @@
     
 functions {
   //Likelihood function for the cure model
-  real ptcm_log(vector yobs, vector v, vector lf, real alpha, real sigma){
+  real ptcm_log(vector yobs, vector v, vector lf, real alpha, vector sigma, int[] type){
       real lpdf;
       real pdf;
       real cdf;
@@ -35,10 +35,10 @@ functions {
       real lprob;
       
      for(i in 1:num_elements(yobs)){
-          lpdf = weibull_lpdf(yobs[i] | alpha, sigma);
+          lpdf = weibull_lpdf(yobs[i] | alpha, sigma[type[i]]);
           pdf = exp(lpdf);
           term1 = - (log(lf[i]))*pdf;
-          cdf = weibull_cdf(yobs[i], alpha, sigma );
+          cdf = weibull_cdf(yobs[i], alpha, sigma[type[i]]);
           term2 = exp(log(lf[i]) * cdf);
           prob[i] = term1^v[i] * term2;
         }
@@ -61,7 +61,6 @@ data {
   
 transformed data {
   real<lower=0> tau_al;
-  real<lower=0> tau_mu;
   vector[N] icept;
   vector[N] varoi;
   real beta_unit;
@@ -69,7 +68,7 @@ transformed data {
   beta_unit = 5;
 
   tau_al = 10.0;
-  tau_mu = 10.0;
+
   for (i in 1:N){
      icept[i] = 1; 
   }
@@ -89,43 +88,49 @@ parameters {
   
 
   real alpha_raw;
-  real mu;
+  
+  real mu_mu;
+  real mu_J;
+  vector<lower=0>[J] s_mu;
     
 }
   
 transformed parameters {
   real<lower=0> alpha;
-  real<lower=1e-10> sigma;
-  vector<lower=1e-10>[N] lf;
-  
+  vector<lower=0>[J] sigma;
+  vector<lower=0, upper=1>[N] lf;
+  vector[J] mu;
+    
   alpha = exp(tau_al * alpha_raw);
-  sigma = exp(-(mu) / alpha);
+  for(i in 1:J){
+    mu[i] = mu_J + mu_mu * s_mu[i];
+  }
+  for (i in 1:J){
+      sigma[i] = exp(-(mu[i]) / alpha);
+    }
+    
   for (i in 1:N){
     lf[i]=1 ./ (1 +exp(-(icept[i]*beta0[type[i]]+ Z_c[i,]*beta_c + varoi[i]*betaI[type[i]] ))); //link function 
   }
 }
   
 model {
- 
   beta0 ~ cauchy(loc0 , s0);
-  
   loc0 ~ normal(0 ,1);
-  
   s0 ~ cauchy(0, 2);
   
   betaI ~ cauchy(locI , sI);
-  
   locI ~ normal(0 ,1);
-  
-  sI ~ cauchy(0, .5);
+  sI ~ exponential(1);
 
   beta_c ~ cauchy(0, 2.5);
-
   alpha_raw ~ normal(0.0, 1.0);
-    
-  mu ~ normal(0.0, tau_mu);
   
-  yobs ~ ptcm(v, lf, alpha, sigma);
+  mu_J ~ normal(0, 1);
+  mu_mu ~ normal(0, 1);
+  s_mu ~ exponential(1);
+  
+  yobs ~ ptcm(v, lf, alpha, sigma, type);
 
 }
 generated quantities{
@@ -137,9 +142,9 @@ generated quantities{
     //loglik train
     for (i in 1:N) {
       //estimate log_lik
-        lpdf = weibull_lpdf(yobs[i] | alpha, sigma );
+        lpdf = weibull_lpdf(yobs[i] | alpha, sigma[type[i]] );
         pdf = exp(lpdf);
-        cdf = weibull_cdf(yobs[i], alpha, sigma );
+        cdf = weibull_cdf(yobs[i], alpha, sigma[type[i]] );
         lik[i] = ((-(log(lf[i]))*pdf)^v[i]) * (exp(log(lf[i]) * cdf));
     }
     
