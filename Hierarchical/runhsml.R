@@ -41,7 +41,7 @@ gen_stan_data <- function(data, eset,  formula = as.formula(~ 1), varoi = NULL) 
     yobs = as.numeric(data$dfs_months),
     v = as.numeric(data$dfs_progression),
     M = M,
-    Z_c = array(Z, dim = c(nrow(data), M)),
+    Z_c = Z,
     J = dplyr::n_distinct(data$type),
     type = data$type,
     Z_g = Z_gene,
@@ -52,11 +52,12 @@ gen_stan_data <- function(data, eset,  formula = as.formula(~ 1), varoi = NULL) 
   )
 }
 into_data <- gen_stan_data(md,
-                           formula =  '~ stage + nodes + erandpr', eset= brcaES) 
+                           formula =  '~ stage + nodes + erandpr + ihc_her2', eset= brcaES) 
+dimnames(into_data$Z_c)[[2]]
 rstan::stan_rdump(ls(into_data), file = "checking.data.R",
                   envir = list2env(into_data))
 gen_stan_data(md,
-              formula =  '~ stage + nodes + erandpr', eset= brcaES) %>%glimpse
+              formula =  '~ stage + nodes + erandpr + ihc_her2', eset= brcaES) %>%glimpse
 
 #---Update inits----#
 gen_inits <- function(J,M,M_g){
@@ -78,7 +79,7 @@ gen_inits <- function(J,M,M_g){
       
     )
 }
-inits <- gen_inits(M = 6, J = 4, M_g = 17213)
+inits <- gen_inits(M = 7, J = 4, M_g = 17213)
 rstan::stan_rdump(ls(inits), file = "checking.init.R",
                   envir = list2env(inits))
 ################################################################

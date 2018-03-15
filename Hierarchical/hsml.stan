@@ -38,15 +38,19 @@ functions {
   }
   //Horseshoe Prior
   vector prior_hs_lp(real r1_global, real r2_global, vector r1_local, vector r2_local, real nu_local, real scale_global, real nu_global){
-
+    vector[num_elements(r1_local)] lambda;
+    real tau;
+    
     //half-t prior for lambda
     r1_local ~ normal(0.0, 1.0);
     r2_local ~ inv_gamma(0.5 * nu_local, 0.5 * nu_local);
     //half-t prior for tau
     r1_global ~ normal(0.0, scale_global);
     r2_global ~ inv_gamma(0.5 * nu_global, 0.5 * nu_global);
+    lambda = r1_local .* sqrt_vec(r2_local);
+    tau = r1_global * sqrt(r2_global);
 
-    return  r1_local .* sqrt(r2_local) * r1_global * sqrt(r2_global);
+    return  (lambda * tau);
   }
   //Likelihood function for the cure model
   real ptcm_log(vector yobs, vector v, vector lf, real alpha, real sigma){
@@ -126,7 +130,7 @@ transformed parameters {
     
   alpha = exp(tau_al * alpha_raw);
   sigma = exp(-(mu) / alpha);
-  beta_g = prior_hs_lp(tau1_global, tau2_global, tau1_local, tau2_local, nu_local, scale_global, nu_global) .* beta_g_raw ;
+  beta_g = beta_g_raw  .* prior_hs_lp(tau1_global, tau2_global, tau1_local, tau2_local, nu_local, scale_global, nu_global) ;
   
   for (i in 1:N){
     lf[i]=1 ./ (1 +exp(-(icept[i]*beta0[type[i]]+ Z_c[i,]*beta_c + Z_g[i,] * beta_g))); //link function 
